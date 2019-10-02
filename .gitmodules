@@ -1,0 +1,3 @@
+[submodule "wasp"]
+	path = wasp
+	url = https://github.com/darmie/wasp
