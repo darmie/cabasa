@@ -1,0 +1,16 @@
+-cp ./src/
+-cp ./test/
+-cp ./Binary128/src
+
+-main Test
+
+-lib hxcpp
+-lib ammer
+-lib console.hx
+
+-D ammer.lib.leb128.include=Binary128/native/cpp
+-D ammer.lib.leb128.library=Binary128/native/cpp
+
+# -D utest
+-dce full
+-cpp build/cpp

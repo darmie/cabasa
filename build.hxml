@@ -1,0 +1,12 @@
+-cp ./src/
+-cp ./test/
+-cp ./wasp/Binary128/src/
+-cp ./wasp/src
+
+-lib ammer
+-lib console.hx
+
+-D ammer.lib.leb128.include=Binary128/native/cpp
+-D ammer.lib.leb128.library=Binary128/native/cpp
+
+-cpp build/cpp 

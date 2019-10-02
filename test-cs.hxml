@@ -1,0 +1,14 @@
+-cp ./src/
+-cp ./test/
+-cp ./wasp/Binary128/src
+-cp ./wasp/src
+
+-main Test
+
+# -lib console.hx
+
+# -D utest
+-dce full
+-cs build/cs
+
+-cmd wine build/cs/bin/Deflate.exe
