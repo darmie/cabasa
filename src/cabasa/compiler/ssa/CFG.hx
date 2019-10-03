@@ -1,5 +1,7 @@
 package cabasa.compiler.ssa;
 
+import haxe.Int64;
+
 /**
  * Describes the Control Flow Graph
  */
@@ -28,7 +30,7 @@ class CFG {
 			jmpIns.immediates = [];
 			for (target in bb.jmpTargets) {
 				var j = bb.jmpTargets.indexOf(target);
-				jmpIns.immediates[j] = blockRelocs[target];
+				jmpIns.immediates[j] = Int64.ofInt(blockRelocs[target]);
 			}
 			switch bb.jmpKind {
 				case JmpUndef:

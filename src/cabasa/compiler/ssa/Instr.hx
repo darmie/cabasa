@@ -9,6 +9,6 @@ typedef Instr = {
      */
     ?target:TyValueID,
     ?op:String,
-    ?immediates:Array<Int>,
+    ?immediates:Array<I64>,
     ?values:Array<TyValueID>
 }

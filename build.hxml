@@ -1,12 +1,16 @@
 -cp ./src/
 -cp ./test/
 -cp ./wasp/Binary128/src/
+-cp ./wasp/Binary128/numerix/src
 -cp ./wasp/src
 
--lib ammer
--lib console.hx
+-lib hexlog
+-lib rxhaxe
 
--D ammer.lib.leb128.include=Binary128/native/cpp
--D ammer.lib.leb128.library=Binary128/native/cpp
+# -lib ammer
+# -lib console.hx
 
--cpp build/cpp 
+# -D ammer.lib.leb128.include=Binary128/native/cpp
+# -D ammer.lib.leb128.library=Binary128/native/cpp
+
+-cs build/cs/

@@ -1,3 +1,3 @@
 package cabasa.compiler.ssa;
 
-typedef TyValueID = Int;
+typedef TyValueID = U64;
