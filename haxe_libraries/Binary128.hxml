@@ -1,0 +1,3 @@
+-D Binary128=0.0.1
+# @install: lix --silent download "haxelib:/Binary128#0.0.1" into Binary128/0.0.1/haxelib
+-cp ${HAXE_LIBCACHE}/Binary128/0.0.1/haxelib/src

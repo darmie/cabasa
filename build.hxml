@@ -1,9 +1,9 @@
 -cp ./src/
 -cp ./test/
--cp ./wasp/Binary128/src/
--cp ./wasp/Binary128/numerix/src
--cp ./wasp/src
 
+-lib Wasp
+-lib Binary128
+-lib Numerix
 -lib hexlog
 -lib rxhaxe
 
