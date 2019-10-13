@@ -686,7 +686,7 @@ class FunctionCompiler {
             }
         }
 
-        var ret:Int = cast regID;
+        var ret:Int = Int64.toInt(regID);
         return ret;
     }
 }

@@ -1,0 +1,3 @@
+-D hexlog=1.0.0-alpha.7
+# @install: lix --silent download "haxelib:/hexlog#1.0.0-alpha.7" into hexlog/1.0.0-alpha.7/haxelib
+-cp ${HAXE_LIBCACHE}/hexlog/1.0.0-alpha.7/haxelib/src
