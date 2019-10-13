@@ -7,6 +7,7 @@ import wasp.imports.*;
 import binary128.internal.Leb128;
 import haxe.io.*;
 import wasp.types.*;
+
 using cabasa.compiler.Opcodes;
 
 typedef InterpreterCode = {
@@ -25,8 +26,8 @@ class Module {
 	public var disableFloatingPoints:Bool;
 
 	public function new() {
-        functionNames =  new Map<Int, String>();
-    }
+		functionNames = new Map<Int, String>();
+	}
 
 	public static function load(raw:Bytes):Module {
 		var reader = new BytesInput(raw);
@@ -54,7 +55,6 @@ class Module {
 					if (n != data.length) {
 						throw "len mismatch";
 					} {
-
 						var r = new BytesInput(data);
 						while (true) {
 							try {
@@ -65,13 +65,12 @@ class Module {
 										var index:U32 = Leb128.readUint32(r);
 										var nameLen = Leb128.readUint32(r);
 										var name = Bytes.alloc(nameLen);
-                                        var n = r.readBytes(name, 0, nameLen);
-                                        if(n != name.length){
-                                            throw "len mismatch";
-                                        }
-                                        var _index:Int = index;
-                                        functionNames.set(_index, name.toString());
-
+										var n = r.readBytes(name, 0, nameLen);
+										if (n != name.length) {
+											throw "len mismatch";
+										}
+										var _index:Int = index;
+										functionNames.set(_index, name.toString());
 									} catch (e:Dynamic) {
 										throw e;
 									}
@@ -84,95 +83,94 @@ class Module {
 				}
 			}
 		}
-        var ret = new Module();
-        ret.base = m;
-        ret.functionNames = functionNames;
+		var ret = new Module();
+		ret.base = m;
+		ret.functionNames = functionNames;
 		return null;
 	}
 
-    /**
-     * Todo
-     */
-    public function compileNative(){}
+	/**
+	 * Todo
+	 */
+	public function compileNative() {}
 
+	/**
+	 * Compile module for interpreter
+	 */
+	public function compileInterp():Array<InterpreterCode> {
+		var ret:Array<InterpreterCode> = [];
+		var importTypeIDs:Array<Int> = [];
 
-    /**
-     * Compile module for interpreter
-     */
-    public function compileInterp():Array<InterpreterCode>{
-        var ret:Array<InterpreterCode> = [];
-        var importTypeIDs:Array<Int> = [];
+		if (base.import_ != null) {
+			var j = 0;
+			for (i in 0...base.import_.entries.length) {
+				var e = base.import_.entries[i];
+				if (e.type.kind() == ExternalFunction) {
+					continue;
+				}
 
-        if(base.import_ != null){
-            var  j = 0;
-            for(i in 0...base.import_.entries.length){
-                var e = base.import_.entries[i];
-                if(e.type.kind() == ExternalFunction){
-                    continue;
-                }
+				var tyID = cast(e.type, FuncImport).type;
+				var ty = base.types.entries[tyID];
 
-                var tyID = cast(e.type, FuncImport).type;
-                var ty = base.types.entries[tyID];
+				var buf = new BytesOutput();
 
-                var buf = new BytesOutput();
+				LittleEndian.PutUint32(buf, 1); // value ID
+				buf.writeByte(InvokeImport);
+				buf.writeByte(j);
 
-                LittleEndian.PutUint32(buf, 1); // value ID
-                buf.writeByte(InvokeImport);
-                buf.writeByte(j);
+				LittleEndian.PutUint32(buf, 0);
 
-                LittleEndian.PutUint32(buf, 0);
+				if (ty.returnTypes.length != 0) {
+					buf.writeByte(ReturnValue);
+					LittleEndian.PutUint32(buf, 1);
+				} else {
+					buf.writeByte(ReturnVoid);
+				}
 
-                if(ty.returnTypes.length != 0){
-                    buf.writeByte(ReturnValue);
-                    LittleEndian.PutUint32(buf, 1);
-                } else {
-                    buf.writeByte(ReturnVoid);
-                }
+				var code = buf.getBytes();
 
-                var code = buf.getBytes();
+				ret.push({
+					numRegs: 2,
+					numParams: ty.paramTypes.length,
+					numLocals: 0,
+					numReturns: ty.returnTypes.length,
+					bytes: code
+				});
 
-                ret.push({
-                    numRegs: 2,
-                    numParams: ty.paramTypes.length,
-                    numLocals: 0,
-                    numReturns: ty.returnTypes.length,
-                    bytes: code
-                });
+				importTypeIDs.push(tyID);
+				j++;
+			}
+		}
 
-                importTypeIDs.push(tyID);
-                j++;
-            }
-        }
+		var numFuncImports = ret.length;
+		ret.resize(base.functionIndexSpace.length);
 
-        var numFuncImports = ret.length;
-        ret.resize(base.functionIndexSpace.length);
+		for (i in 0...base.functionIndexSpace.length) {
+			var f = base.functionIndexSpace[i];
 
-        for(i in 0...base.functionIndexSpace.length){
-            var f = base.functionIndexSpace[i];
+			var d = new Disassembly(f, base);
+			var compiler = new FunctionCompiler(base, d);
+			compiler.callIndexOffset = numFuncImports;
+			compiler.compile(importTypeIDs);
+			if (disableFloatingPoints) {
+				compiler.filterFloatingPoint();
+			}
 
-            var d = new Disassembly(f, base);
-            var compiler = new FunctionCompiler(base, d);
-            compiler.callIndexOffset = numFuncImports;
-            compiler.compile(importTypeIDs);
-            if(disableFloatingPoints){
-                compiler.filterFloatingPoint();
-            }
+			var numRegs = compiler.regAlloc();
+			var numLocals = 0;
+			for (v in f.body.locals) {
+				var count:Int = v.count;
+				numLocals += count;
+			}
+			ret[numFuncImports + i] = {
+				numRegs: numRegs,
+				numParams: f.sig.paramTypes.length,
+				numLocals: numLocals,
+				numReturns: f.sig.returnTypes.length,
+				bytes: compiler.serialize()
+			};
+		}
 
-            var numRegs = compiler.regAlloc();
-            var numLocals = 0;
-            for(v in f.body.locals){
-                var count:Int = v.count;
-                numLocals += count;
-            }
-            ret[numFuncImports+i] = {
-                numRegs: numRegs,
-                numParams: f.sig.paramTypes.length,
-                numLocals: numLocals,
-                numReturns: f.sig.returnTypes.length,
-                bytes: compiler.serialize()
-            };
-        }
-
-        return ret;
-    }
+		return ret;
+	}
 }

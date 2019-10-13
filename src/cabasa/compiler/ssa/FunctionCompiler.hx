@@ -1475,99 +1475,113 @@ class FunctionCompiler {
 						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
 						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
 					}
-				case "jmp":{
-					buf.writeByte(Jmp);
+				case "jmp":
+					{
+						buf.writeByte(Jmp);
 
-					reloc32Targets.push(buf.length);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-				}
-				case "jmp_if":{
-					buf.writeByte(JmpIf);
-
-					reloc32Targets.push(buf.length);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-					LittleEndian.PutUint32(buf, cast ins.values[1]);
-				}
-				case "jmp_either":{
-					buf.writeByte(JmpEither);
-
-					reloc32Targets.push(buf.length);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-					reloc32Targets.push(buf.length);
-					LittleEndian.PutUint32(buf, cast ins.immediates[1]);
-
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-					LittleEndian.PutUint32(buf, cast ins.values[1]);
-				}
-				case "jmp_table":{
-					buf.writeByte(JmpTable);
-					var imm = ins.immediates.length - 1;
-					LittleEndian.PutUint32(buf, cast imm);
-
-					for(v in ins.immediates){
 						reloc32Targets.push(buf.length);
-						LittleEndian.PutUint32(buf, cast v);
-					}
-
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-					LittleEndian.PutUint32(buf, cast ins.values[1]);
-				}
-				case "phi":{
-					buf.writeByte(Phi);
-				}
-				case "return":{
-					if(ins.values.length != 0){
-						buf.writeByte(ReturnValue);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
 						LittleEndian.PutUint32(buf, cast ins.values[0]);
-					} else {
-						buf.writeByte(ReturnVoid);
 					}
-				}
-				case "get_local":{
-					buf.writeByte(GetLocal);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-				}
-				case "set_local":{
-					buf.writeByte(SetLocal);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-				}
-				case "call":{
-					buf.writeByte(Call);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-					LittleEndian.PutUint32(buf, cast ins.values.length);
-					for(v in ins.values){
-						LittleEndian.PutUint32(buf, cast v);
+				case "jmp_if":
+					{
+						buf.writeByte(JmpIf);
+
+						reloc32Targets.push(buf.length);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
 					}
-				}
-				case "call_indirect":{
-					buf.writeByte(CallIndirect);
-					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
-					LittleEndian.PutUint32(buf, cast ins.values.length);
-					for(v in ins.values){
-						LittleEndian.PutUint32(buf, cast v);
+				case "jmp_either":
+					{
+						buf.writeByte(JmpEither);
+
+						reloc32Targets.push(buf.length);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+						reloc32Targets.push(buf.length);
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]);
+
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
 					}
-				}
-				case "current_memory":{
-					buf.writeByte(CurrentMemory);
-				}
-				case "grow_memory":{
-					buf.writeByte(GrowMemory);
-					LittleEndian.PutUint32(buf, cast ins.values[0]);
-				}
-				case "fp_disabled_error":{
-					buf.writeByte(FPDisabledError);
-				}
-				default: throw ins.op;
+				case "jmp_table":
+					{
+						buf.writeByte(JmpTable);
+						var imm = ins.immediates.length - 1;
+						LittleEndian.PutUint32(buf, cast imm);
+
+						for (v in ins.immediates) {
+							reloc32Targets.push(buf.length);
+							LittleEndian.PutUint32(buf, cast v);
+						}
+
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "phi":
+					{
+						buf.writeByte(Phi);
+					}
+				case "return":
+					{
+						if (ins.values.length != 0) {
+							buf.writeByte(ReturnValue);
+							LittleEndian.PutUint32(buf, cast ins.values[0]);
+						} else {
+							buf.writeByte(ReturnVoid);
+						}
+					}
+				case "get_local":
+					{
+						buf.writeByte(GetLocal);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					}
+				case "set_local":
+					{
+						buf.writeByte(SetLocal);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "call":
+					{
+						buf.writeByte(Call);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+						LittleEndian.PutUint32(buf, cast ins.values.length);
+						for (v in ins.values) {
+							LittleEndian.PutUint32(buf, cast v);
+						}
+					}
+				case "call_indirect":
+					{
+						buf.writeByte(CallIndirect);
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+						LittleEndian.PutUint32(buf, cast ins.values.length);
+						for (v in ins.values) {
+							LittleEndian.PutUint32(buf, cast v);
+						}
+					}
+				case "current_memory":
+					{
+						buf.writeByte(CurrentMemory);
+					}
+				case "grow_memory":
+					{
+						buf.writeByte(GrowMemory);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "fp_disabled_error":
+					{
+						buf.writeByte(FPDisabledError);
+					}
+				default:
+					throw ins.op;
 			}
 		}
-		
+
 		var ret = buf.getBytes();
-		for(t in reloc32Targets){
-			var insPos = LittleEndian.Uint32(ret.sub(t, t+4));
+		for (t in reloc32Targets) {
+			var insPos = LittleEndian.Uint32(ret.sub(t, t + 4));
 			var bo = new BytesOutput();
 			LittleEndian.PutUint32(bo, cast insRelocs[cast insPos]);
 			ret.blit(t, bo.getBytes(), 0, 4);
