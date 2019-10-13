@@ -26,7 +26,9 @@ class FunctionCompiler {
 
 	public var pushStack:Dynamic = null;
 
-	public function new() {
+	public function new(m:Module, d:Disassembly) {
+        module = m;
+        source = d;
 		code = [];
 		stack = [];
 		locations = [];
@@ -640,4 +642,51 @@ class FunctionCompiler {
 			values: values
 		};
 	}
+
+    /**
+     * FIXME: The current RegAlloc is based on wasm stack info and we probably
+     * want a real one (in addition to this) with liveness analysis.
+     * Returns the total number of registers used.
+     * https://github.com/perlin-network/life/blob/master/compiler/liveness.go
+     * @return Int
+     */
+    public function regAlloc():Int {
+        var regID:TyValueID = 1;
+
+        var valueRelocs = new Map<TyValueID, TyValueID>();
+
+        for(values in stackValueSets){
+            for(v in values){
+                valueRelocs.set(v, regID);
+            }
+            regID++;
+        }
+
+        for(i in 0...code.length){
+            var ins = code[i];
+            if(ins.target != 0){
+                var reg = valueRelocs.get(ins.target);
+                if(reg != null){
+                    ins.target = reg;
+                } else {
+                    throw "Register not found for target";
+                }
+            }
+
+            for(j in 0...ins.values.length){
+                var v = ins.values[j];
+                if(v != 0){
+                    var reg = valueRelocs.get(v);
+                    if(reg != null){
+                        ins.values[j] = reg;
+                    } else {
+                        throw "Register not found for value";
+                    }
+                } 
+            }
+        }
+
+        var ret:Int = cast regID;
+        return ret;
+    }
 }
