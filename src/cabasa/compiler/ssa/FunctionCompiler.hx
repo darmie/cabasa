@@ -1,11 +1,19 @@
 package cabasa.compiler.ssa;
 
+import haxe.io.BytesBuffer;
+import wasp.io.Read;
+import haxe.io.BytesInput;
+import wasp.io.LittleEndian;
+import haxe.io.BytesOutput;
 import wasp.types.FunctionSig;
 import wasp.types.BlockType;
 import haxe.io.FPHelper;
 import haxe.Int64;
 import wasp.Module;
 import wasp.disasm.Disassembly;
+import haxe.io.Bytes;
+
+using cabasa.compiler.Opcodes;
 
 /**
  * FunctionCompiler represents a compiler which translates a WebAssembly module's
@@ -27,8 +35,8 @@ class FunctionCompiler {
 	public var pushStack:Dynamic = null;
 
 	public function new(m:Module, d:Disassembly) {
-        module = m;
-        source = d;
+		module = m;
+		source = d;
 		code = [];
 		stack = [];
 		locations = [];
@@ -518,6 +526,10 @@ class FunctionCompiler {
 		}
 	}
 
+	/**
+	 * Convert to Control Flow Graph
+	 * @return CFG
+	 */
 	public function toCFG():CFG {
 		var g = new CFG();
 		var insLabels = new Map<Int, Int>();
@@ -555,9 +567,9 @@ class FunctionCompiler {
 		g.blocks = [];
 
 		var currentBlock:BasicBlock = {
-            code: [],
-            jmpTargets:[]
-        };
+			code: [],
+			jmpTargets: []
+		};
 
 		for (i in 0...code.length) {
 			var ins = code[0];
@@ -616,20 +628,21 @@ class FunctionCompiler {
 						if (ins.values.length > 0) {
 							currentBlock.yieldValue = ins.values[0];
 						}
-                        currentBlock = null;
+						currentBlock = null;
 					}
-                default: currentBlock.code.push(ins);
+				default:
+					currentBlock.code.push(ins);
 			}
 		}
 
-        var label = insLabels.get(code.length);
-        if(label != null){
-            var lastBlock = g.blocks[label];
-            if(lastBlock.jmpKind != JmpUndef){
-                throw "last block should always have an undefined jump target";
-            }
-            lastBlock.jmpKind = JmpReturn;
-        }
+		var label = insLabels.get(code.length);
+		if (label != null) {
+			var lastBlock = g.blocks[label];
+			if (lastBlock.jmpKind != JmpUndef) {
+				throw "last block should always have an undefined jump target";
+			}
+			lastBlock.jmpKind = JmpReturn;
+		}
 
 		return g;
 	}
@@ -643,50 +656,923 @@ class FunctionCompiler {
 		};
 	}
 
-    /**
-     * FIXME: The current RegAlloc is based on wasm stack info and we probably
-     * want a real one (in addition to this) with liveness analysis.
-     * Returns the total number of registers used.
-     * https://github.com/perlin-network/life/blob/master/compiler/liveness.go
-     * @return Int
-     */
-    public function regAlloc():Int {
-        var regID:TyValueID = 1;
+	/**
+	 * FIXME: The current RegAlloc is based on wasm stack info and we probably
+	 * want a real one (in addition to this) with liveness analysis.
+	 * Returns the total number of registers used.
+	 * https://github.com/perlin-network/life/blob/master/compiler/liveness.go
+	 * @return Int
+	 */
+	public function regAlloc():Int {
+		var regID:TyValueID = 1;
 
-        var valueRelocs = new Map<TyValueID, TyValueID>();
+		var valueRelocs = new Map<TyValueID, TyValueID>();
 
-        for(values in stackValueSets){
-            for(v in values){
-                valueRelocs.set(v, regID);
-            }
-            regID++;
-        }
+		for (values in stackValueSets) {
+			for (v in values) {
+				valueRelocs.set(v, regID);
+			}
+			regID++;
+		}
 
-        for(i in 0...code.length){
-            var ins = code[i];
-            if(ins.target != 0){
-                var reg = valueRelocs.get(ins.target);
-                if(reg != null){
-                    ins.target = reg;
-                } else {
-                    throw "Register not found for target";
-                }
-            }
+		for (i in 0...code.length) {
+			var ins = code[i];
+			if (ins.target != 0) {
+				var reg = valueRelocs.get(ins.target);
+				if (reg != null) {
+					ins.target = reg;
+				} else {
+					throw "Register not found for target";
+				}
+			}
 
-            for(j in 0...ins.values.length){
-                var v = ins.values[j];
-                if(v != 0){
-                    var reg = valueRelocs.get(v);
-                    if(reg != null){
-                        ins.values[j] = reg;
-                    } else {
-                        throw "Register not found for value";
-                    }
-                } 
-            }
-        }
+			for (j in 0...ins.values.length) {
+				var v = ins.values[j];
+				if (v != 0) {
+					var reg = valueRelocs.get(v);
+					if (reg != null) {
+						ins.values[j] = reg;
+					} else {
+						throw "Register not found for value";
+					}
+				}
+			}
+		}
 
-        var ret:Int = Int64.toInt(regID);
-        return ret;
-    }
+		var ret:Int = cast regID;
+		return ret;
+	}
+
+	/**
+	 * serializes a set of SSA-form instructions into a byte array
+	 * for execution with an exec.VirtualMachine.
+	 *
+	 * Instruction encoding:
+	 * Value ID (4 bytes) | Opcode (1 byte) | Operands
+	 *
+	 * Types are erased in the generated code.
+	 * Example: float32/float64 are represented as uint32/uint64 respectively.
+	 * @return Bytes
+	 */
+	public function serialize():Bytes {
+		var buf = new BytesOutput();
+		var insRelocs:Array<Int> = [];
+		var reloc32Targets:Array<Int> = [];
+
+		for (i in 0...code.length) {
+			var ins = code[i];
+
+			insRelocs[i] = buf.length;
+			LittleEndian.PutUint32(buf, cast ins.target);
+
+			switch ins.op {
+				case "unreachable":
+					buf.writeByte(Unreachable);
+				case "select":
+					{
+						buf.writeByte(Select);
+						for (k in 0...3) {
+							LittleEndian.PutUint32(buf, cast ins.values[k]);
+						}
+					}
+
+				// for int32
+				case "i32.const" | "f32.const":
+					{
+						buf.writeByte(I32Const);
+						buf.writeInt32(cast ins.immediates[0]);
+					}
+				case "i32.add":
+					{
+						buf.writeByte(I32Add);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.sub":
+					{
+						buf.writeByte(I32Sub);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.mul":
+					{
+						buf.writeByte(I32Mul);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.div_s":
+					{
+						buf.writeByte(I32DivS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.div_u":
+					{
+						buf.writeByte(I32DivU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.rem_s":
+					{
+						buf.writeByte(I32RemS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.rem_u":
+					{
+						buf.writeByte(I32RemU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.and":
+					{
+						buf.writeByte(I32And);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.or":
+					{
+						buf.writeByte(I32Or);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.xor":
+					{
+						buf.writeByte(I32Xor);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.shl":
+					{
+						buf.writeByte(I32Shl);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.shr_s":
+					{
+						buf.writeByte(I32ShrS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.shr_u":
+					{
+						buf.writeByte(I32ShrU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.rotl":
+					{
+						buf.writeByte(I32Rotl);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.rotr":
+					{
+						buf.writeByte(I32Rotr);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.clz":
+					{
+						buf.writeByte(I32Clz);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.ctz":
+					{
+						buf.writeByte(I32Ctz);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.popcnt":
+					{
+						buf.writeByte(I32PopCnt);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.eqz":
+					{
+						buf.writeByte(I32EqZ);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.eq":
+					{
+						buf.writeByte(I32Eq);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.ne":
+					{
+						buf.writeByte(I32Ne);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.lt_s":
+					{
+						buf.writeByte(I32LtS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.lt_u":
+					{
+						buf.writeByte(I32LtU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.le_s":
+					{
+						buf.writeByte(I32LeS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.le_u":
+					{
+						buf.writeByte(I32LeU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.gt_s":
+					{
+						buf.writeByte(I32GtS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.gt_u":
+					{
+						buf.writeByte(I32GtU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.ge_s":
+					{
+						buf.writeByte(I32GeS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i32.ge_u":
+					{
+						buf.writeByte(I32GeU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+
+				// for int64
+				case "i64.const" | "f64.const":
+					{
+						buf.writeByte(I64Const);
+						buf.writeDouble(FPHelper.i64ToDouble(ins.immediates[0].low, ins.immediates[0].high));
+					}
+				case "i64.add":
+					{
+						buf.writeByte(I64Add);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.sub":
+					{
+						buf.writeByte(I64Add);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.mul":
+					{
+						buf.writeByte(I64Mul);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.div_s":
+					{
+						buf.writeByte(I64DivS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.div_u":
+					{
+						buf.writeByte(I64DivU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.rem_s":
+					{
+						buf.writeByte(I64RemS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.rem_u":
+					{
+						buf.writeByte(I64RemU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.and":
+					{
+						buf.writeByte(I64And);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.or":
+					{
+						buf.writeByte(I64Or);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.xor":
+					{
+						buf.writeByte(I64Xor);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.shl":
+					{
+						buf.writeByte(I64Shl);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.shr_s":
+					{
+						buf.writeByte(I64ShrS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.shr_u":
+					{
+						buf.writeByte(I64ShrU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.rotl":
+					{
+						buf.writeByte(I64Rotl);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.rotr":
+					{
+						buf.writeByte(I64Rotr);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.clz":
+					{
+						buf.writeByte(I64Clz);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.ctz":
+					{
+						buf.writeByte(I64Ctz);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.popcnt":
+					{
+						buf.writeByte(I64PopCnt);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.eqz":
+					{
+						buf.writeByte(I64EqZ);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.eq":
+					{
+						buf.writeByte(I64Eq);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.ne":
+					{
+						buf.writeByte(I64Ne);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.lt_s":
+					{
+						buf.writeByte(I64LtS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.lt_u":
+					{
+						buf.writeByte(I64LtU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.le_s":
+					{
+						buf.writeByte(I64LeS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.le_u":
+					{
+						buf.writeByte(I64LeU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.gt_s":
+					{
+						buf.writeByte(I64GtS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.gt_u":
+					{
+						buf.writeByte(I64GtU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.ge_s":
+					{
+						buf.writeByte(I64GeS);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "i64.ge_u":
+					{
+						buf.writeByte(I64GeU);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+
+				// for f32
+				case "f32.add":
+					{
+						buf.writeByte(F32Add);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.sub":
+					{
+						buf.writeByte(F32Sub);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.mul":
+					{
+						buf.writeByte(F32Mul);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.div":
+					{
+						buf.writeByte(F32Div);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.sqrt":
+					{
+						buf.writeByte(F32Sqrt);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.min":
+					{
+						buf.writeByte(F32Min);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.max":
+					{
+						buf.writeByte(F32Max);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.ceil":
+					{
+						buf.writeByte(F32Ceil);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.floor":
+					{
+						buf.writeByte(F32Floor);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.trunc":
+					{
+						buf.writeByte(F32Trunc);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.nearest":
+					{
+						buf.writeByte(F32Nearest);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.abs":
+					{
+						buf.writeByte(F32Abs);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.neg":
+					{
+						buf.writeByte(F32Neg);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.copysign":
+					{
+						buf.writeByte(F32CopySign);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.eq":
+					{
+						buf.writeByte(F32Eq);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.ne":
+					{
+						buf.writeByte(F32Eq);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.lt":
+					{
+						buf.writeByte(F32Lt);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.le":
+					{
+						buf.writeByte(F32Le);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.gt":
+					{
+						buf.writeByte(F32Gt);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+				case "f32.Ge":
+					{
+						buf.writeByte(F32Ge);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+						LittleEndian.PutUint32(buf, cast ins.values[1]);
+					}
+
+				case "i32.wrap/i64":
+					{
+						buf.writeByte(I32WrapI64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.trunc_s/f32":
+					{
+						buf.writeByte(I32TruncSF32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.trunc_s/f64":
+					{
+						buf.writeByte(I32TruncSF64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.trunc_u/f32":
+					{
+						buf.writeByte(I32TruncUF32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.trunc_u/f64":
+					{
+						buf.writeByte(I32TruncUF64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.trunc_s/f32":
+					{
+						buf.writeByte(I64TruncSF32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.trunc_s/f64":
+					{
+						buf.writeByte(I64TruncSF64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.trunc_u/f32":
+					{
+						buf.writeByte(I64TruncUF32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.trunc_u/f64":
+					{
+						buf.writeByte(I64TruncUF64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.extend_u/i32":
+					{
+						buf.writeByte(I64ExtendUI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i64.extend_s/i32":
+					{
+						buf.writeByte(I64ExtendSI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.demote/f64":
+					{
+						buf.writeByte(F32DemoteF64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f64.promote/f32":
+					{
+						buf.writeByte(F64PromoteF32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f64.convert_s/i32":
+					{
+						buf.writeByte(F64ConvertSI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f64.convert_u/i32":
+					{
+						buf.writeByte(F64ConvertUI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f64.convert_s/i64":
+					{
+						buf.writeByte(F64ConvertSI64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f64.convert_u/i64":
+					{
+						buf.writeByte(F64ConvertUI64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.convert_s/i32":
+					{
+						buf.writeByte(F32ConvertSI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.convert_u/i32":
+					{
+						buf.writeByte(F32ConvertUI32);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.convert_s/i64":
+					{
+						buf.writeByte(F32ConvertSI64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "f32.convert_u/i64":
+					{
+						buf.writeByte(F32ConvertUI64);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					}
+				case "i32.reinterpret/f32" | "i64.reinterpret/f64" | "f32.reinterpret/i32" | "f64.reinterpret/i64":
+					{
+						buf.writeByte(Nop);
+					}
+
+				// Memory
+				case "i32.load" | "f32.load":
+					{
+						buf.writeByte(I32Load);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i32.load8_s":
+					{
+						buf.writeByte(I32Load8S);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i32.load16_s":
+					{
+						buf.writeByte(I32Load16S);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load8_s":
+					{
+						buf.writeByte(I64Load8S);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load16_s":
+					{
+						buf.writeByte(I64Load16S);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load32_s":
+					{
+						buf.writeByte(I64Load32S);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i32.load8_u":
+					{
+						buf.writeByte(I32Load8U);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i32.load16_u":
+					{
+						buf.writeByte(I32Load16U);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load8_u":
+					{
+						buf.writeByte(I64Load8U);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load16_u":
+					{
+						buf.writeByte(I64Load16U);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load32_u":
+					{
+						buf.writeByte(I64Load32U);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i64.load" | "f64.load":
+					{
+						buf.writeByte(I64Load);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+					}
+				case "i32.store" | "f32.store":
+					{
+						buf.writeByte(I32Store);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i32.store8":
+					{
+						buf.writeByte(I32Store8);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i32.store16":
+					{
+						buf.writeByte(I32Store16);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i64.store8":
+					{
+						buf.writeByte(I64Store8);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i64.store16":
+					{
+						buf.writeByte(I64Store16);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i64.store32":
+					{
+						buf.writeByte(I64Store32);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "i64.store" | "f64.store":
+					{
+						buf.writeByte(I64Store);
+
+						LittleEndian.PutUint32(buf, cast ins.immediates[0]); // Memory alignment flags
+						LittleEndian.PutUint32(buf, cast ins.immediates[1]); // Memory offset
+						LittleEndian.PutUint32(buf, cast ins.values[0]); // Memory base address
+						LittleEndian.PutUint32(buf, cast ins.values[1]); // Address of value to store
+					}
+				case "jmp":{
+					buf.writeByte(Jmp);
+
+					reloc32Targets.push(buf.length);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+				}
+				case "jmp_if":{
+					buf.writeByte(JmpIf);
+
+					reloc32Targets.push(buf.length);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+					LittleEndian.PutUint32(buf, cast ins.values[1]);
+				}
+				case "jmp_either":{
+					buf.writeByte(JmpEither);
+
+					reloc32Targets.push(buf.length);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					reloc32Targets.push(buf.length);
+					LittleEndian.PutUint32(buf, cast ins.immediates[1]);
+
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+					LittleEndian.PutUint32(buf, cast ins.values[1]);
+				}
+				case "jmp_table":{
+					buf.writeByte(JmpTable);
+					var imm = ins.immediates.length - 1;
+					LittleEndian.PutUint32(buf, cast imm);
+
+					for(v in ins.immediates){
+						reloc32Targets.push(buf.length);
+						LittleEndian.PutUint32(buf, cast v);
+					}
+
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+					LittleEndian.PutUint32(buf, cast ins.values[1]);
+				}
+				case "phi":{
+					buf.writeByte(Phi);
+				}
+				case "return":{
+					if(ins.values.length != 0){
+						buf.writeByte(ReturnValue);
+						LittleEndian.PutUint32(buf, cast ins.values[0]);
+					} else {
+						buf.writeByte(ReturnVoid);
+					}
+				}
+				case "get_local":{
+					buf.writeByte(GetLocal);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+				}
+				case "set_local":{
+					buf.writeByte(SetLocal);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+				}
+				case "call":{
+					buf.writeByte(Call);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					LittleEndian.PutUint32(buf, cast ins.values.length);
+					for(v in ins.values){
+						LittleEndian.PutUint32(buf, cast v);
+					}
+				}
+				case "call_indirect":{
+					buf.writeByte(CallIndirect);
+					LittleEndian.PutUint32(buf, cast ins.immediates[0]);
+					LittleEndian.PutUint32(buf, cast ins.values.length);
+					for(v in ins.values){
+						LittleEndian.PutUint32(buf, cast v);
+					}
+				}
+				case "current_memory":{
+					buf.writeByte(CurrentMemory);
+				}
+				case "grow_memory":{
+					buf.writeByte(GrowMemory);
+					LittleEndian.PutUint32(buf, cast ins.values[0]);
+				}
+				case "fp_disabled_error":{
+					buf.writeByte(FPDisabledError);
+				}
+				default: throw ins.op;
+			}
+		}
+		
+		var ret = buf.getBytes();
+		for(t in reloc32Targets){
+			var insPos = LittleEndian.Uint32(ret.sub(t, t+4));
+			var bo = new BytesOutput();
+			LittleEndian.PutUint32(bo, cast insRelocs[cast insPos]);
+			ret.blit(t, bo.getBytes(), 0, 4);
+		}
+
+		return ret;
+	}
 }
