@@ -1,4 +1,4 @@
-package cabaser.compiler;
+package cabasa.compiler;
 
 import cabasa.compiler.ssa.FunctionCompiler;
 import wasp.disasm.Disassembly;

@@ -1581,9 +1581,9 @@ class FunctionCompiler {
 
 		var ret = buf.getBytes();
 		for (t in reloc32Targets) {
-			var insPos = LittleEndian.Uint32(ret.sub(t, t + 4));
+			var insPos:Int = cast LittleEndian.Uint32(ret.sub(t, t + 4));
 			var bo = new BytesOutput();
-			LittleEndian.PutUint32(bo, cast insRelocs[cast insPos]);
+			LittleEndian.PutUint32(bo, cast insRelocs[insPos]);
 			ret.blit(t, bo.getBytes(), 0, 4);
 		}
 
