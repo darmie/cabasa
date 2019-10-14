@@ -1,5 +1,7 @@
 package cabasa.exec;
 
+import cabasa.compiler.Opcodes;
+import wasp.io.LittleEndian;
 import wasp.types.External;
 import wasp.io.Read;
 import binary128.internal.Leb128;
@@ -322,7 +324,11 @@ class VM {
         Sys.println("--- End stack trace ---");
     }
 
-    
+    /**
+     * Initializes the first call frame.
+     * @param functionID 
+     * @param params 
+     */
     public function ignite(functionID:Int, params:Array<I64>){
         if(exitErr != null){
             throw "last execution exited with error; cannot ignite.";
@@ -354,6 +360,77 @@ class VM {
      * detecting VM status in a loop.
      */
     public function execute(){
+        // Todo: execute
+        if(exited){
+            throw "attempting to execute an exited vm";
+        }
 
+        if(delegate != null){
+            throw "delegate not cleared";
+        }
+
+        if(insideExecute){
+            throw "vm execution is not re-entrant";
+        }
+
+        insideExecute = true;
+
+        try{
+            var frame = getCurrentFrame();
+            while(true){
+                var valueID:Int = cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4));
+                var ins:Opcodes = frame.code.get(frame.IP+4);
+                frame.IP += 5;
+
+                switch ins {
+                    case Nop:
+                    case Unreachable: throw "wasm: unreachable executed";
+                    case Select:{
+                        var a = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4))];
+                        var b = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP+8))];
+                        var c:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP+8, frame.IP+12))];
+                        frame.IP += 12;
+
+                        if(c != 0){
+                            frame.regs[valueID] = a;
+                        } else {
+                            frame.regs[valueID] = b;
+                        }
+                    }
+                    case I32Const:{
+                        var val = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4));
+                        frame.IP += 4;
+                        frame.regs[valueID] = cast val;
+                    }
+                    case I32Add:{
+                        var a:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4));
+                        var b:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP+8));
+                        frame.IP += 8;
+                        var val:I32 = a + b;
+                        frame.regs[valueID] = cast val;
+                    }
+                    case I32Sub:{
+                        var a:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4));
+                        var b:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP+8));
+                        frame.IP += 8;
+                        var val:I32 = a - b;
+                        frame.regs[valueID] = cast val;
+                    }
+                    case I32Mul:{
+                        var a:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP+4));
+                        var b:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP+8));
+                        frame.IP += 8;
+                        var val:I32 = a * b;
+                        frame.regs[valueID] = cast val;
+                    }
+                }
+
+            }
+        }catch(e:Dynamic){
+            insideExecute = false;
+            exited = true;
+            exitErr = e;
+            stackTrace = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+        }
     }
 }
