@@ -837,10 +837,9 @@ class VM {
 					case I64PopCnt:
 						{
 							var val:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							
 
 							frame.IP += 4;
-							
+
 							frame.regs[valueID] = Int64.ofInt(OnesCount64(val));
 						}
 					case I64Clz:
@@ -878,7 +877,7 @@ class VM {
 								frame.regs[valueID] = 0;
 							}
 						}
-					 case I64Ne:
+					case I64Ne:
 						{
 							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
@@ -977,103 +976,654 @@ class VM {
 								frame.regs[valueID] = 0;
 							}
 						}
-					case F32Add:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = a + b;
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Sub:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = a - b;
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Mul:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = a * b;
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Div:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = a / b;
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Sqrt:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+					case F32Add:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a + b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Sub:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a - b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Mul:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a * b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Div:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a / b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Sqrt:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.sqrt(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Min:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = Math.min(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Max:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = Math.max(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Ceil:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.fceil(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Floor:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.ffloor(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Nearest:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.fround(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Abs:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.abs(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Neg:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = -a;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Trunc:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Trunc(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32CopySign:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = CopySign(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F32Eq:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a == b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F32Ne:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a != b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F32Lt:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a < b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F32Le:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a <= b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F32Gt:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a > b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F32Ge:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							if (a >= b) {
+								frame.regs[valueID] = 1;
+							} else {
+								frame.regs[valueID] = 0;
+							}
+						}
+					case F64Add:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a + b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Sub:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a - b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Mul:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a * b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Div:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = a / b;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Sqrt:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.sqrt(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Min:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = Math.min(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Max:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+							var c = Math.max(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Ceil:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.fceil(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Floor:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.ffloor(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Trunc:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Trunc(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Nearest:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.fround(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Abs:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = Math.abs(a);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Neg:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+
+							frame.IP += 4;
+							var c = -a;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64CopySign:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = CopySign(a, b);
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Eq:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a == b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Ne:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a != b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Lt:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a < b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Le:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a <= b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Gt:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a > b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case F64Ge:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							frame.IP += 8;
+
+							var c = a >= b ? 1 : 0;
+							frame.regs[valueID] = FPHelper.doubleToI64(c);
+						}
+					case I32WrapI64:
+						{
+							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = cast a;
+						}
+					case I32TruncSF32 | I32TruncUF32:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							frame.IP += 4;
+
+							var c = FPHelper.floatToI32(Trunc(a));
+							frame.regs[valueID] = Int64.ofInt(c);
+						}
+					case I64TruncSF64 | I64TruncUF64:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							frame.IP += 4;
+
+							var c = FPHelper.doubleToI64(Trunc(a));
+							frame.regs[valueID] = c;
+						}
+					case F32DemoteF64:
+						{
+							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							frame.IP += 4;
+							var c = FPHelper.floatToI32(a);
+							frame.regs[valueID] = Int64.ofInt(c);
+						}
+					case F64PromoteF32:
+						{
+							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							frame.IP += 4;
+							var c = FPHelper.doubleToI64(a);
+							frame.regs[valueID] = c;
+						}
+					case F32ConvertSI32:
+						{
+							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(a);
+						}
+					case F32ConvertUI32:
+						{
+							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(a);
+						}
+					case F32ConvertSI64:
+						{
+							var a:I64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = a;
+						}
+					case F32ConvertUI64:
+						{
+							var a:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = cast a;
+						}
+					case F64ConvertSI32:
+						{
+							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(a);
+						}
+					case F64ConvertUI32:
+						{
+							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(a);
+						}
+					case F64ConvertSI64:
+						{
+							var a:I64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = a;
+						}
+					case F64ConvertUI64:
+						{
+							var a:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = cast a;
+						}
+					case I64ExtendSI32:
+						{
+							var v:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(v);
+						}
+					case I64ExtendUI32:
+						{
+							var v:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+							frame.regs[valueID] = Int64.ofInt(v);
+						}
+					case I32Load | I64Load32U:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							frame.regs[valueID] = LittleEndian.Uint32(memory.sub(effective, effective + 4));
+						}
+					case I64Load32S:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+
+							frame.regs[valueID] = cast Read.U64(new BytesInput(memory.sub(effective, effective + 4)));
+						}
+					case I64Load:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+
+							frame.regs[valueID] = cast Read.U64(new BytesInput(memory.sub(effective, effective + 8)));
+						}
+					case I32Load8S | I64Load8S:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							frame.regs[valueID] = Int64.ofInt(memory.get(effective));
+						}
+					case I32Load8U | I64Load8U:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							frame.regs[valueID] = Int64.ofInt(cast(memory.get(effective), UInt));
+						}
+					case I32Load16S | I64Load16S:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							var b = new BytesInput(memory.sub(effective, effective + 2));
+							b.bigEndian = false;
+							frame.regs[valueID] = Int64.ofInt(b.readInt16());
+						}
+					case I32Load16U | I64Load16U:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							frame.IP += 12;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							var b = new BytesInput(memory.sub(effective, effective + 2));
+							b.bigEndian = false;
+							frame.regs[valueID] = Int64.ofInt(b.readUInt16());
+						}
+					case I32Store | I64Store32:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							frame.IP += 16;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							var b = memory.sub(effective, effective + 4);
+							b.set(0, value);
+							b.set(1, value >> 8);
+							b.set(2, value >> 16);
+							b.set(3, value >> 24);
+						}
+					case I64Store:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							frame.IP += 16;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							var b = memory.sub(effective, effective + 8);
+							b.set(0, cast(value, UInt));
+							b.set(1, cast(value >> 8, UInt));
+							b.set(2, cast(value >> 16, UInt));
+							b.set(3, cast(value >> 24, UInt));
+							b.set(4, cast(value >> 32, UInt));
+							b.set(5, cast(value >> 40, UInt));
+							b.set(6, cast(value >> 48, UInt));
+							b.set(7, cast(value >> 56, UInt));
+						}
+					case I32Store8 | I64Store8:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							frame.IP += 16;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+
+							memory.set(effective, value);
+						}
+					case I32Store16 | I64Store16:
+						{
+							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							frame.IP += 16;
+
+							var x:U64 = offset; // implicit cast
+							var y:U64 = base; // implicit cast
+							var effective:I32 = cast(x + y);
+							var b = memory.sub(effective, effective + 2);
+							LittleEndian.PutUint16(b, value);
+						}
+					case Jmp:
+						{
+							var target:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							this.yielded = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							frame.IP = target;
+						}
+					case JmpEither:
+						{
+							var targetA:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							var targetB:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var cond:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12));
+							var yieldReg:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16));
+
+							frame.IP += 16;
+
+							this.yielded = frame.regs[yieldReg];
+							if (frame.regs[cond] != 0) {
+								frame.IP = targetA;
+							} else {
+								frame.IP = targetB;
+							}
+						}
+					case JmpIf:
+						{
+							var target:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							var cond:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
+							var yieldReg:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12));
+
+							frame.IP += 12;
+
+							if (frame.regs[cond] != 0) {
+								this.yielded = frame.regs[yieldReg];
+								frame.IP = target;
+							}
+						}
+					case JmpTable:
+						{
+							var targetCount:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							frame.IP += 4;
+
+							var targetRaw = frame.code.sub(frame.IP, frame.IP + 4 * targetCount);
+							frame.IP += 4 * targetCount;
+
+							var defaultTarget:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							frame.IP += 4;
+
+							var cond:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+							frame.IP += 4;
+
+							this.yielded = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.IP += 4;
+
+							var val = Int64.toInt(frame.regs[cond]);
+
+							if(val >= 0 && val < targetCount){
+								frame.IP = LittleEndian.Uint32(targetRaw.sub(val*4, val*4+4));
+							} else {
+								frame.IP = defaultTarget;
+							}
+						}
+					case ReturnValue:{
 						
-						frame.IP += 4;
-						var c = Math.sqrt(a);
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Min:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = Math.min(a, b);
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Max:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = Math.max(a, b);
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
-					}
-					case F32Ceil:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = Math.fceil(a);
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32Floor:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = Math.ffloor(a);
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32Nearest:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = Math.fround(a);
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32Abs:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = Math.abs(a);
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32Neg:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = -a;
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32Trunc:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						
-						frame.IP += 4;
-						var c = Trunc(a);
-						frame.regs[valueID] =  FPHelper.doubleToI64(c);
-					}
-					case F32CopySign:{
-						var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-						var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
-						frame.IP += 8;
-						var c = CopySign(a, b);
-						frame.regs[valueID] = FPHelper.doubleToI64(c);
 					}
 				}
 			}

@@ -289,7 +289,7 @@ class Op {
         #if cs 
         return untyped __cs__('System.Convert.ToDouble({0})', x);
         #elseif java
-        return FPHelper.i64ToDouble(x.toInt64());
+        return x.toDouble();
         #elseif cpp
         untyped __cpp__('double ret = {0}', x);
         return untyped __cpp__('ret');
@@ -321,11 +321,11 @@ class Op {
         #elseif java 
         return java.lang.Math.copySign(x, y);
         #elseif cs 
-        var mag =  untyped __cs__('System.BitConverter.DoubleToInt64Bits({0})', x);
-        var signBits =  untyped __cs__('System.BitConverter.DoubleToInt64Bits({0})', y);
+        var magBits = cs.system.BitConverter.DoubleToInt64Bits(x);
+        var signBits = cs.system.BitConverter.DoubleToInt64Bits(y);
          
-        if((mag ^ signBits)  < 0){
-            return untyped __cs__('System.BitConverter.Int64BitsToDouble(mag ^ long.MinValue)');
+        if((magBits ^ signBits)  < 0){
+            return cs.system.BitConverter.Int64BitsToDouble(magBits ^ cs.system.Int64.MinValue);
         }
         return x;
         #end
