@@ -46,7 +46,46 @@ if(data.err != null){
 }
 Sys.println('return value ${data.result}');
 ``` 
+### Implementing an Import Resolver
+Assume a code compiled to wasm calls an virtual (or native) function `__graphics_drawCirle(radius, color)`, we need to resolve for this function in the host application. 
 
+We create an **ImportResolver** class:
+```hx
+import cabasa.exec.*;
+
+class MyImportResolver implements ImportResolver {
+    ...
+    public function resolveFunc(module:String, field:String):FunctionImport {
+        return switch module {
+            case 'env':{
+                switch field:{
+                    case '__graphics_drawCirle': function(vm:VM):I64->{
+                            // get the local variables or function params
+                            var radius:U32 = vm.getCurrentFrame().locals[0]; 
+                            var color:U32 = vm.getCurrentFrame().locals[1]; 
+
+                            // call the equivalent of the function in the host app
+                            myhost.app.Graphics.drawCircle(cast radius, cast color); 
+
+                            return 0;
+                        };
+                    }
+                    default: throw 'cannot find field $field in module $module';
+                }
+            }
+            default: throw 'module $module not found in host';
+        }
+    }
+    // just like resolveFunc but returns the ID of the global export
+    public function resolveGlobal(module:String, field:String):I64 {
+        throw "not implemented for now"; 
+    }
+}
+```
+Now use this resolver in a VM instance
+```hx
+var vm = new VM(code, {...}, new MyImportResolver());
+```
 
 ### Dependencies
 
