@@ -10,6 +10,14 @@
 - **Cross-Platform** - Cābāsā aims to take full advantage of Haxe's cross platform capabilities, therefore wasm module can go anywhere Haxe goes.
 
 ## Getting Started
+Install package manager
+```
+npm i -g lix
+``` 
+Use latest Haxe version
+```
+lix use haxe 4.0.0-rc.5
+```
 Download dependencies 
 ```
 lix download
