@@ -1623,8 +1623,145 @@ class VM {
 							}
 						}
 					case ReturnValue:{
-						
+						var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+						frame.destroy(this);
+						currentFrame--;
+						if(currentFrame == -1){
+							exited = true;
+							returnValue = val;
+							return;
+						} else {
+							frame = getCurrentFrame();
+							frame.regs[frame.returnReg] = val;
+						}
 					}
+					case ReturnVoid:{
+						frame.destroy(this);
+						currentFrame--;
+						if(currentFrame == -1){
+							exited = true;
+							returnValue = 0;
+							return;
+						} else {
+							frame = getCurrentFrame();
+						}
+					}
+					case GetLocal:{
+						var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						var val = frame.locals[id];
+						frame.IP += 4;
+						frame.regs[valueID] = val;
+					}
+					case SetLocal:{
+						var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP + 8))];
+						frame.IP += 8;
+
+						frame.locals[id] = val;
+					}
+					case GetGlobal:{
+						frame.regs[valueID] = globals[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+						frame.IP += 4;
+					}
+					case SetGlobal:{
+						var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP+4, frame.IP + 8))];
+						frame.IP += 8;
+
+						globals[id] = val;
+					}
+					case Call:{
+						var functionID:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						frame.IP += 4;
+						var argCount:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						frame.IP += 4;
+
+						var argsRaw = frame.code.sub(frame.IP, frame.IP+4*argCount);
+						frame.IP += 4 * argCount;
+
+						var oldRegs = frame.regs;
+						frame.returnReg = valueID;
+
+						currentFrame++;
+						frame = getCurrentFrame();
+						frame.init(this, functionID, functionCode[functionID]);
+
+						for(i in 0...argCount){
+							frame.locals[i] = oldRegs[LittleEndian.Uint32(argsRaw.sub(i*4, i*4+4))];
+						}
+					}
+					case CallIndirect:{
+						var typeID:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						frame.IP += 4;
+						var argCount:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						argCount = argCount - 1;
+						frame.IP += 4;
+
+						var argsRaw = frame.code.sub(frame.IP, frame.IP+4*argCount);
+						frame.IP += 4 * argCount;
+
+						var tableItemId:Int = Int64.toInt(frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+						frame.IP += 4;
+
+						var sig = module.base.types.entries[typeID];
+
+						var functionID:Int = table[tableItemId];
+						var code = functionCode[functionID];
+
+						// TODO: We are only checking CC here; Do we want strict typeck?
+						if(code.numParams != sig.paramTypes.length || code.numReturns != sig.returnTypes.length){
+							throw "type mismatch";
+						}
+
+						var oldRegs = frame.regs;
+						frame.returnReg = valueID;
+
+						currentFrame++;
+						frame = getCurrentFrame();
+						frame.init(this, functionID, code);
+						for(i in 0...argCount){
+							frame.locals[i] = oldRegs[LittleEndian.Uint32(argsRaw.sub(i*4, i*4+4))];
+						}
+					}
+					case InvokeImport:{
+						var importID = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+						frame.IP += 4;
+						delegate = ()->{
+							try{
+								var imp = functionImports[importID];
+								if(imp.func == null){
+									imp.func = importResolver.resolveFunc(imp.moduleName, imp.fieldName);
+								}
+								frame.regs[valueID] = imp.func(this);
+							}catch(e:Dynamic){
+								exited = true;
+								exitErr = e;
+							}
+						}
+						return;
+					}
+					case CurrentMemory:{
+						frame.regs[valueID] = FPHelper.doubleToI64(memory.length / DefaultPageSize);
+					}
+					case GrowMemory:{
+						var _n:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+						var n:I32 = _n;
+						frame.IP += 4;
+						var current = memory.length / DefaultPageSize; 
+						if(config.maxMemoryPages == 0 || (current+n >= current && current+n <= config.maxMemoryPages)){
+							frame.regs[valueID] = FPHelper.doubleToI64(current);
+							var b = Bytes.alloc(n*DefaultPageSize);
+							var bb = new BytesOutput();
+							bb.writeBytes(memory, 0, memory.length);
+							bb.writeBytes(b, 0, n*DefaultPageSize);
+							memory = bb.getBytes();
+						} else {
+							frame.regs[valueID] = -1;
+						}
+					}
+					case Phi: frame.regs[valueID] = yielded;
+					case FPDisabledError: throw "wasm: floating point disabled";
+					default: throw "unknown instruction";
 				}
 			}
 		} catch (e:Dynamic) {
