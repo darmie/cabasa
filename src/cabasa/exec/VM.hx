@@ -16,6 +16,13 @@ import haxe.io.*;
 import cabasa.compiler.Module;
 import cabasa.bits.Op.*;
 
+import cabasa.Native.*;
+
+typedef RunVal = {
+	?err:Dynamic,
+	?result:I64
+} 
+
 /**
  * WebAssemble virtual machine
  */
@@ -352,6 +359,49 @@ class VM {
 		frame.init(this, functionID, code);
 
 		frame.locals = params.copy();
+	}
+
+	/**
+	 * Runs a WebAssembly modules function denoted by its ID with a specified set of parameters.
+	 * 
+	 * @param entryID 
+	 * @param params 
+	 * @return RunVal
+	 */
+	public function run(entryID:Int, params:Array<I64>):RunVal {
+		var retVal:RunVal = null;
+		this.ignite(entryID, params); // call Ignite() to perform necessary checks even if we are using the AOT mode.
+
+		if(AOTService != null){
+			try{
+				var targetName:String = '$FUNCTION_PREFIX$entryID';
+				switch params.length {
+					case 0: retVal.result = cast AOTService.UnsafeInvokeFunction_0(this, targetName);
+					case 1: retVal.result = cast AOTService.UnsafeInvokeFunction_1(this, targetName, cast params[0]);
+					case 2: retVal.result = cast AOTService.UnsafeInvokeFunction_2(this, targetName, cast params[0], cast params[1]);
+				}
+				retVal.err = null;
+				currentFrame = -1;
+				return retVal;
+			} catch (e:Dynamic){
+				retVal.err = e;
+			}
+		}
+		while(!exited){
+			execute();
+			if(delegate != null){
+				delegate();
+				delegate = null;
+			}
+		}
+		if(exitErr != null){
+			retVal = {
+				result: -1,
+				err: exitErr
+			}
+		}
+		retVal.result = returnValue;
+		return retVal;
 	}
 
 	/**
