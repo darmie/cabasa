@@ -1,5 +1,5 @@
 # Cābāsā
-**Cābāsā** is a haxe framework for WebAssembly which includes a fast and secure WebAssembly VirtualMachine (which is a haxe port of [Life](https://github.com/perlin-network/life) virtualmachine).
+**Cābāsā** is a haxe framework for WebAssembly which includes a fast and secure WebAssembly VM (which is a haxe port of [Life](https://github.com/perlin-network/life) VM).
 
 [Status: Not Ready For Use!]
 
@@ -47,4 +47,8 @@ Sys.println('return value ${data.result}');
  * [Binary128](https://github.com/darmie/binary128)
  * [Numerix](https://github.com/darmie/numerix)
 
-
+### To-Do
+- Command Line Interface for running wasm module from terminal, disassemble wasm or compile wasm to Haxe AOT
+- Validate wasm binary
+- Extension framwork for distributing wasm modules as Haxe libraries
+- Examples 
