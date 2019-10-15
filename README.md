@@ -59,7 +59,7 @@ class MyImportResolver implements ImportResolver {
         return switch module {
             case 'env':{
                 switch field:{
-                    case '__graphics_drawCirle': function(vm:VM):I64->{
+                    case '__graphics_drawCirle': function(vm:VM):I64 {
                             // get the local variables or function params
                             var radius:U32 = vm.getCurrentFrame().locals[0]; 
                             var color:U32 = vm.getCurrentFrame().locals[1]; 
