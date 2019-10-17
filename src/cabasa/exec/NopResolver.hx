@@ -11,7 +11,7 @@ class NopResolver implements ImportResolver {
      * @return FunctionImport
      */
     public function resolveFunc(module:String, field:String):FunctionImport {
-        throw "not implemented";
+        throw '$module.$field Function import is not implemented';
     }
 
     /**
@@ -21,6 +21,6 @@ class NopResolver implements ImportResolver {
      * @return I64
      */
     public function resolveGlobal(module:String, field:String):I64 {
-        throw "not implemented";
+        throw '$module.$field Global import is not implemented';
     }
 }
