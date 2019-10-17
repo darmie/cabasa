@@ -17,6 +17,8 @@ import cabasa.compiler.Module;
 import cabasa.bits.Op.*;
 import cabasa.Native.*;
 
+using cabasa.exec.Frame.FrameUtils;
+
 typedef RunVal = {
 	?err:Dynamic,
 	?result:I64
@@ -80,11 +82,17 @@ class VM {
 		// set if we should disable floatingpoint
 		module.disableFloatingPoints = config.disableFloatingPoint;
 
+		currentFrame = -1;
+
+		
+
 		var functionCode = module.compileInterp();
 
 		var table:Array<U32> = [];
 		var globals:Array<I64> = [];
 		var funcImports:Array<FunctionImportInfo> = [];
+
+		
 
 		if (module.base.import_ != null && importResolver != null) {
 			for (imp in module.base.import_.entries) {
@@ -161,6 +169,7 @@ class VM {
 		var memory = Bytes.alloc(0);
 		if (module.base.memory != null && module.base.memory.entries.length > 0) {
 			var initialLimit:Int = cast module.base.memory.entries[0].limits.initial;
+			
 			if (config.maxMemoryPages != 0 && initialLimit > config.maxMemoryPages) {
 				throw "max memory exceeded";
 			}
@@ -188,6 +197,9 @@ class VM {
 		this.functionCode = functionCode;
 		this.functionImports = funcImports;
 		this.callStack = [];
+		for(i in 0...DefaultCallStackSize){
+			this.callStack[i] = {};
+		}
 		this.currentFrame = -1;
 		this.table = table;
 		this.globals = globals;
@@ -346,6 +358,7 @@ class VM {
 		}
 
 		var code = functionCode[functionID];
+		
 		if (code.numParams != params.length) {
 			throw "param count mismatch";
 		}
@@ -353,11 +366,11 @@ class VM {
 		exited = false;
 
 		currentFrame++;
+		
+		getCurrentFrame().init(this, functionID, code);
 
-		var frame = getCurrentFrame();
-		frame.init(this, functionID, code);
-
-		frame.locals = params.copy();
+		getCurrentFrame().locals = params.copy();
+		
 	}
 
 	/**
@@ -368,7 +381,7 @@ class VM {
 	 * @return RunVal
 	 */
 	public function run(entryID:Int, params:Array<I64>):RunVal {
-		var retVal:RunVal = null;
+		var retVal:RunVal = {};
 		this.ignite(entryID, params); // call Ignite() to perform necessary checks even if we are using the AOT mode.
 
 		if (AOTService != null) {
@@ -431,10 +444,10 @@ class VM {
 		try {
 			var frame = getCurrentFrame();
 			while (true) {
-				var valueID:Int = cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
+				var valueID:Int = cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4));
 				var ins:Opcodes = frame.code.get(frame.IP + 4);
 				frame.IP += 5;
-
+			
 				switch ins {
 					case Nop:
 					case Unreachable:
@@ -460,32 +473,32 @@ class VM {
 						}
 					case I32Add:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							var val:I32 = a + b;
 							frame.regs[valueID] = Int64.ofInt(val);
 						}
 					case I32Sub:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							var val:I32 = a - b;
 							frame.regs[valueID] = Int64.ofInt(val);
 						}
 					case I32Mul:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							var val:I32 = a * b;
 							frame.regs[valueID] = Int64.ofInt(val);
 						}
 					case I32DivS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -499,20 +512,20 @@ class VM {
 						}
 					case I32DivU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
 
 							frame.IP += 8;
-							var val:U32 = cast(a / b);
+							var val:U32 = cast(FPHelper.floatToI32(a / b));
 							frame.regs[valueID] = Int64.ofInt(cast val);
 						}
 					case I32RemS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -523,8 +536,8 @@ class VM {
 						}
 					case I32RemU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -535,8 +548,8 @@ class VM {
 						}
 					case I32And:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:I32 = (a & b);
@@ -544,8 +557,8 @@ class VM {
 						}
 					case I32Or:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:I32 = (a | b);
@@ -553,8 +566,8 @@ class VM {
 						}
 					case I32Xor:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:I32 = (a ^ b);
@@ -562,8 +575,8 @@ class VM {
 						}
 					case I32Shl:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:I32 = (a << (b % 32));
@@ -571,8 +584,8 @@ class VM {
 						}
 					case I32ShrS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:I32 = (a >> (b % 32));
@@ -580,8 +593,8 @@ class VM {
 						}
 					case I32ShrU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val:U32 = (a >> (b % 32));
@@ -589,8 +602,8 @@ class VM {
 						}
 					case I32Rotl:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val = rotateLeft32(a, b);
@@ -598,8 +611,8 @@ class VM {
 						}
 					case I32Rotr:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var val = rotateLeft32(a, -b);
@@ -607,19 +620,19 @@ class VM {
 						}
 					case I32Clz:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(LeadingZeros32(a));
 						}
 					case I32PopCnt:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(OnesCount32(a));
 						}
 					case I32EqZ:
 						{
-							var val:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							if (val == 0) {
 								frame.regs[valueID] = 1;
@@ -629,8 +642,8 @@ class VM {
 						}
 					case I32Eq:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a == b) {
 								frame.regs[valueID] = 1;
@@ -640,8 +653,8 @@ class VM {
 						}
 					case I32Ne:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a != b) {
 								frame.regs[valueID] = 1;
@@ -651,8 +664,8 @@ class VM {
 						}
 					case I32LtS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a < b) {
 								frame.regs[valueID] = 1;
@@ -662,8 +675,8 @@ class VM {
 						}
 					case I32LtU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a < b) {
 								frame.regs[valueID] = 1;
@@ -673,8 +686,8 @@ class VM {
 						}
 					case I32LeS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a <= b) {
 								frame.regs[valueID] = 1;
@@ -684,8 +697,8 @@ class VM {
 						}
 					case I32LeU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a <= b) {
 								frame.regs[valueID] = 1;
@@ -695,8 +708,8 @@ class VM {
 						}
 					case I32GtS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a > b) {
 								frame.regs[valueID] = 1;
@@ -706,8 +719,8 @@ class VM {
 						}
 					case I32GtU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a > b) {
 								frame.regs[valueID] = 1;
@@ -717,8 +730,8 @@ class VM {
 						}
 					case I32GeS:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a >= b) {
 								frame.regs[valueID] = 1;
@@ -728,8 +741,8 @@ class VM {
 						}
 					case I32GeU:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a >= b) {
 								frame.regs[valueID] = 1;
@@ -746,29 +759,29 @@ class VM {
 						}
 					case I64Add:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							frame.regs[valueID] = a + b;
 						}
 					case I64Sub:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							frame.regs[valueID] = a - b;
 						}
 					case I64Mul:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							frame.regs[valueID] = a * b;
 						}
 					case I64DivS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							var minI64Val:I64 = -9223372036854775808;
 
@@ -784,8 +797,8 @@ class VM {
 						}
 					case I64DivU:
 						{
-							var a:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -796,8 +809,8 @@ class VM {
 						}
 					case I64RemS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -807,8 +820,8 @@ class VM {
 						}
 					case I64RemU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							if (b == 0)
 								throw "integer division by zero";
@@ -818,16 +831,16 @@ class VM {
 						}
 					case I64And:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							frame.regs[valueID] = a & b;
 						}
 					case I64Or:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							frame.regs[valueID] = a | b;
@@ -835,16 +848,16 @@ class VM {
 
 					case I64Xor:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							frame.regs[valueID] = a ^ b;
 						}
 					case I64Shl:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var v = (a << (b % 64));
@@ -852,8 +865,8 @@ class VM {
 						}
 					case I64ShrS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var v = (a >> (b % 64));
@@ -861,8 +874,8 @@ class VM {
 						}
 					case I64ShrU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var v = (a >> (b % 64));
@@ -870,8 +883,8 @@ class VM {
 						}
 					case I64Rotl:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var v = rotateLeft64(cast a, cast b);
@@ -879,8 +892,8 @@ class VM {
 						}
 					case I64Rotr:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
 							var v = rotateLeft64(cast a, -cast(b, Int));
@@ -888,7 +901,7 @@ class VM {
 						}
 					case I64PopCnt:
 						{
-							var val:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 
 							frame.IP += 4;
 
@@ -896,21 +909,21 @@ class VM {
 						}
 					case I64Clz:
 						{
-							var val:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(LeadingZeros64(val));
 						}
 					case I64Ctz:
 						{
-							var val:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(TrailingZeros64(val));
 						}
 					case I64EqZ:
 						{
-							var val:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							if (val == 0) {
 								frame.regs[valueID] = 1;
@@ -920,8 +933,8 @@ class VM {
 						}
 					case I64Eq:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a == b) {
 								frame.regs[valueID] = 1;
@@ -931,8 +944,8 @@ class VM {
 						}
 					case I64Ne:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a != b) {
 								frame.regs[valueID] = 1;
@@ -942,8 +955,8 @@ class VM {
 						}
 					case I64LtS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a < b) {
 								frame.regs[valueID] = 1;
@@ -953,8 +966,8 @@ class VM {
 						}
 					case I64LtU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a < b) {
 								frame.regs[valueID] = 1;
@@ -964,8 +977,8 @@ class VM {
 						}
 					case I64LeS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a <= b) {
 								frame.regs[valueID] = 1;
@@ -975,8 +988,8 @@ class VM {
 						}
 					case I64LeU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a <= b) {
 								frame.regs[valueID] = 1;
@@ -986,8 +999,8 @@ class VM {
 						}
 					case I64GtS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a > b) {
 								frame.regs[valueID] = 1;
@@ -997,8 +1010,8 @@ class VM {
 						}
 					case I64GtU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a > b) {
 								frame.regs[valueID] = 1;
@@ -1008,8 +1021,8 @@ class VM {
 						}
 					case I64GeS:
 						{
-							var a:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:I64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:I64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a >= b) {
 								frame.regs[valueID] = 1;
@@ -1019,8 +1032,8 @@ class VM {
 						}
 					case I64GeU:
 						{
-							var a:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
-							var b:U64 = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var a:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var b:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 							if (a >= b) {
 								frame.regs[valueID] = 1;
@@ -1030,39 +1043,39 @@ class VM {
 						}
 					case F32Add:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a + b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Sub:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a - b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Mul:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a * b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Div:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a / b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Sqrt:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.sqrt(a);
@@ -1070,23 +1083,23 @@ class VM {
 						}
 					case F32Min:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = Math.min(a, b);
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Max:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = Math.max(a, b);
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Ceil:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.fceil(a);
@@ -1094,7 +1107,7 @@ class VM {
 						}
 					case F32Floor:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.ffloor(a);
@@ -1102,7 +1115,7 @@ class VM {
 						}
 					case F32Nearest:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.fround(a);
@@ -1110,7 +1123,7 @@ class VM {
 						}
 					case F32Abs:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.abs(a);
@@ -1118,7 +1131,7 @@ class VM {
 						}
 					case F32Neg:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = -a;
@@ -1126,7 +1139,7 @@ class VM {
 						}
 					case F32Trunc:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Trunc(a);
@@ -1134,16 +1147,16 @@ class VM {
 						}
 					case F32CopySign:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = CopySign(a, b);
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F32Eq:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a == b) {
 								frame.regs[valueID] = 1;
@@ -1153,8 +1166,8 @@ class VM {
 						}
 					case F32Ne:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a != b) {
 								frame.regs[valueID] = 1;
@@ -1164,8 +1177,8 @@ class VM {
 						}
 					case F32Lt:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a < b) {
 								frame.regs[valueID] = 1;
@@ -1175,8 +1188,8 @@ class VM {
 						}
 					case F32Le:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a <= b) {
 								frame.regs[valueID] = 1;
@@ -1186,8 +1199,8 @@ class VM {
 						}
 					case F32Gt:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a > b) {
 								frame.regs[valueID] = 1;
@@ -1197,8 +1210,8 @@ class VM {
 						}
 					case F32Ge:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							if (a >= b) {
 								frame.regs[valueID] = 1;
@@ -1208,39 +1221,39 @@ class VM {
 						}
 					case F64Add:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a + b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Sub:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a - b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Mul:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a * b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Div:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = a / b;
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Sqrt:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.sqrt(a);
@@ -1248,23 +1261,23 @@ class VM {
 						}
 					case F64Min:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = Math.min(a, b);
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Max:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 							var c = Math.max(a, b);
 							frame.regs[valueID] = FPHelper.doubleToI64(c);
 						}
 					case F64Ceil:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.fceil(a);
@@ -1272,7 +1285,7 @@ class VM {
 						}
 					case F64Floor:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.ffloor(a);
@@ -1280,7 +1293,7 @@ class VM {
 						}
 					case F64Trunc:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Trunc(a);
@@ -1288,7 +1301,7 @@ class VM {
 						}
 					case F64Nearest:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.fround(a);
@@ -1296,7 +1309,7 @@ class VM {
 						}
 					case F64Abs:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = Math.abs(a);
@@ -1304,7 +1317,7 @@ class VM {
 						}
 					case F64Neg:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 
 							frame.IP += 4;
 							var c = -a;
@@ -1312,8 +1325,8 @@ class VM {
 						}
 					case F64CopySign:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = CopySign(a, b);
@@ -1321,8 +1334,8 @@ class VM {
 						}
 					case F64Eq:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a == b ? 1 : 0;
@@ -1330,8 +1343,8 @@ class VM {
 						}
 					case F64Ne:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a != b ? 1 : 0;
@@ -1339,8 +1352,8 @@ class VM {
 						}
 					case F64Lt:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a < b ? 1 : 0;
@@ -1348,8 +1361,8 @@ class VM {
 						}
 					case F64Le:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a <= b ? 1 : 0;
@@ -1357,8 +1370,8 @@ class VM {
 						}
 					case F64Gt:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a > b ? 1 : 0;
@@ -1366,8 +1379,8 @@ class VM {
 						}
 					case F64Ge:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
-							var b:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var b:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))]);
 							frame.IP += 8;
 
 							var c = a >= b ? 1 : 0;
@@ -1375,13 +1388,13 @@ class VM {
 						}
 					case I32WrapI64:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = cast a;
 						}
 					case I32TruncSF32 | I32TruncUF32:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 
 							var c = FPHelper.floatToI32(Trunc(a));
@@ -1389,7 +1402,7 @@ class VM {
 						}
 					case I32TruncSF64 | I32TruncUF64:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 
 							var c = FPHelper.floatToI32(Trunc(a));
@@ -1397,7 +1410,7 @@ class VM {
 						}
 					case I64TruncSF32 | I64TruncUF32:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 
 							var c = FPHelper.doubleToI64(Trunc(a));
@@ -1405,14 +1418,14 @@ class VM {
 						}
 					case I32Ctz:
 						{
-							var val:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(TrailingZeros32(val));
 						}
 					case I64TruncSF64 | I64TruncUF64:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 
 							var c = FPHelper.doubleToI64(Trunc(a));
@@ -1420,97 +1433,97 @@ class VM {
 						}
 					case F32DemoteF64:
 						{
-							var a:Float = Float64frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float64frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 							var c = FPHelper.floatToI32(a);
 							frame.regs[valueID] = Int64.ofInt(c);
 						}
 					case F64PromoteF32:
 						{
-							var a:Float = Float32frombits(cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var a:Float = Float32frombits(cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 							var c = FPHelper.doubleToI64(a);
 							frame.regs[valueID] = c;
 						}
 					case F32ConvertSI32:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(a);
 						}
 					case F32ConvertUI32:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(a);
 						}
 					case F32ConvertSI64:
 						{
-							var a:I64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:I64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = a;
 						}
 					case F32ConvertUI64:
 						{
-							var a:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = cast a;
 						}
 					case F64ConvertSI32:
 						{
-							var a:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(a);
 						}
 					case F64ConvertUI32:
 						{
-							var a:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(a);
 						}
 					case F64ConvertSI64:
 						{
-							var a:I64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:I64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = a;
 						}
 					case F64ConvertUI64:
 						{
-							var a:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var a:U64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = cast a;
 						}
 					case I64ExtendSI32:
 						{
-							var v:I32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var v:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(v);
 						}
 					case I64ExtendUI32:
 						{
-							var v:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var v:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 							frame.regs[valueID] = Int64.ofInt(v);
 						}
 					case I32Load | I64Load32U:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							frame.regs[valueID] = LittleEndian.Uint32(memory.sub(effective, effective + 4));
 						}
 					case I64Load32S:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 
 							frame.regs[valueID] = cast Read.U64(new BytesInput(memory.sub(effective, effective + 4)));
@@ -1518,11 +1531,11 @@ class VM {
 					case I64Load:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 
 							frame.regs[valueID] = cast Read.U64(new BytesInput(memory.sub(effective, effective + 8)));
@@ -1530,33 +1543,33 @@ class VM {
 					case I32Load8S | I64Load8S:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							frame.regs[valueID] = Int64.ofInt(memory.get(effective));
 						}
 					case I32Load8U | I64Load8U:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							frame.regs[valueID] = Int64.ofInt(cast(memory.get(effective), UInt));
 						}
 					case I32Load16S | I64Load16S:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							var b = new BytesInput(memory.sub(effective, effective + 2));
 							b.bigEndian = false;
@@ -1565,11 +1578,11 @@ class VM {
 					case I32Load16U | I64Load16U:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
 							frame.IP += 12;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							var b = new BytesInput(memory.sub(effective, effective + 2));
 							b.bigEndian = false;
@@ -1578,12 +1591,12 @@ class VM {
 					case I32Store | I64Store32:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
-							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
 							frame.IP += 16;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							var b = memory.sub(effective, effective + 4);
 							b.set(0, value);
@@ -1594,12 +1607,12 @@ class VM {
 					case I64Store:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
-							var value:U64 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U64 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
 							frame.IP += 16;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							var b = memory.sub(effective, effective + 8);
 							b.set(0, cast(value, UInt));
@@ -1614,12 +1627,12 @@ class VM {
 					case I32Store8 | I64Store8:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
-							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
 							frame.IP += 16;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 
 							memory.set(effective, value);
@@ -1627,12 +1640,12 @@ class VM {
 					case I32Store16 | I64Store16:
 						{
 							var offset = LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8));
-							var base:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
-							var value:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
+							var base:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, frame.IP + 12))];
+							var value:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 12, frame.IP + 16))];
 							frame.IP += 16;
 
-							var x:U64 = offset; // implicit cast
-							var y:U64 = base; // implicit cast
+							var x:U64 = cast offset; // implicit cast
+							var y:U64 = cast base; // implicit cast
 							var effective:I32 = cast(x + y);
 							var b = memory.sub(effective, effective + 2);
 							LittleEndian.PutUint16(b, value);
@@ -1640,7 +1653,7 @@ class VM {
 					case Jmp:
 						{
 							var target:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
-							this.yielded = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							this.yielded = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP = target;
 						}
 					case JmpEither:
@@ -1686,7 +1699,7 @@ class VM {
 							var cond:I32 = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
 							frame.IP += 4;
 
-							this.yielded = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							this.yielded = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 
 							var val = Int64.toInt(frame.regs[cond]);
@@ -1699,7 +1712,7 @@ class VM {
 						}
 					case ReturnValue:
 						{
-							var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var val = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4))];
 							frame.destroy(this);
 							currentFrame--;
 							if (currentFrame == -1) {
@@ -1726,30 +1739,30 @@ class VM {
 					case GetLocal:
 						{
 							var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
-							var val = frame.locals[id];
+							var val = frame.locals[cast id];
 							frame.IP += 4;
 							frame.regs[valueID] = val;
 						}
 					case SetLocal:
 						{
 							var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
-							var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var val = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 
-							frame.locals[id] = val;
+							frame.locals[cast id] = val;
 						}
 					case GetGlobal:
 						{
-							frame.regs[valueID] = globals[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							frame.regs[valueID] = globals[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							frame.IP += 4;
 						}
 					case SetGlobal:
 						{
 							var id = LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4));
-							var val = frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
+							var val = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 							frame.IP += 8;
 
-							globals[id] = val;
+							globals[cast id] = val;
 						}
 					case Call:
 						{
@@ -1769,7 +1782,7 @@ class VM {
 							frame.init(this, functionID, functionCode[functionID]);
 
 							for (i in 0...argCount) {
-								frame.locals[i] = oldRegs[LittleEndian.Uint32(argsRaw.sub(i * 4, i * 4 + 4))];
+								frame.locals[i] = oldRegs[cast LittleEndian.Uint32(argsRaw.sub(i * 4, i * 4 + 4))];
 							}
 						}
 					case CallIndirect:
@@ -1783,7 +1796,7 @@ class VM {
 							var argsRaw = frame.code.sub(frame.IP, frame.IP + 4 * argCount);
 							frame.IP += 4 * argCount;
 
-							var tableItemId:Int = Int64.toInt(frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
+							var tableItemId:Int = Int64.toInt(frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))]);
 							frame.IP += 4;
 
 							var sig = module.base.types.entries[typeID];
@@ -1803,7 +1816,7 @@ class VM {
 							frame = getCurrentFrame();
 							frame.init(this, functionID, code);
 							for (i in 0...argCount) {
-								frame.locals[i] = oldRegs[LittleEndian.Uint32(argsRaw.sub(i * 4, i * 4 + 4))];
+								frame.locals[i] = oldRegs[cast LittleEndian.Uint32(argsRaw.sub(i * 4, i * 4 + 4))];
 							}
 						}
 					case InvokeImport:
@@ -1812,7 +1825,7 @@ class VM {
 							frame.IP += 4;
 							delegate = () -> {
 								try {
-									var imp = functionImports[importID];
+									var imp = functionImports[cast importID];
 									if (imp.func == null) {
 										imp.func = importResolver.resolveFunc(imp.moduleName, imp.fieldName);
 									}
@@ -1830,7 +1843,7 @@ class VM {
 						}
 					case GrowMemory:
 						{
-							var _n:U32 = cast frame.regs[LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
+							var _n:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 							var n:I32 = _n;
 							frame.IP += 4;
 							var current = memory.length / DefaultPageSize;

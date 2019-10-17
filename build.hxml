@@ -7,10 +7,16 @@
 -lib hexlog
 -lib rxhaxe
 
+-main test.Test
+
+-D debug
+
 # -lib ammer
 # -lib console.hx
 
 # -D ammer.lib.leb128.include=Binary128/native/cpp
 # -D ammer.lib.leb128.library=Binary128/native/cpp
 
--cs build/cs/
+# -cs build/cs/
+
+-java build/java/

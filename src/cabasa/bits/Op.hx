@@ -21,7 +21,7 @@ class Op {
 	#if cs
 	static var deBruijn64:U64 = untyped __cs__('0x03F79D71B4CA8B09uL');
 	#elseif java
-	static var deBruijn64:U64 = untyped __java__('0x03F79D71B4CA8B09L & 0xFFFFFFFFL');
+	static var deBruijn64:U64 = U64.fromInt64(untyped __java__('0x03F79D71B4CA8B09L'));
 	#elseif cpp
 	static var deBruijn64:U64 = untyped __cpp__('0x03F79D71B4CA8B09');
 	#end
@@ -31,15 +31,15 @@ class Op {
 	static var m1:U64 = untyped __cs__('0x3333333333333333uL'); // 00110011 ...
 	static var m2:U64 = untyped __cs__('0x0F0F0F0F0F0f0F0FuL'); // 00001111 ...
 
-	#elseif static
-	var m0:U64 = untyped __java__('0x5555555555555555L & 0xFFFFFFFFL'); // 01010101 ...
+	#elseif java
+	static var m0:U64 = U64.fromInt64(untyped __java__('0x5555555555555555L')); // 01010101 ...
 
-	static var m1:U64 = untyped __java__('0x3333333333333333L & 0xFFFFFFFFL'); // 00110011 ...
-	static var m2:U64 = untyped __java__('0x0F0F0F0F0F0f0F0FL & 0xFFFFFFFFL'); // 00001111 ...
+	static var m1:U64 = U64.fromInt64(untyped __java__('0x3333333333333333L')); // 00110011 ...
+	static var m2:U64 = U64.fromInt64(untyped __java__('0x0F0F0F0F0F0f0F0FL')); // 00001111 ...
 	#elseif cpp
 	static var m0:U64 = untyped __cpp__('0x5555555555555555'); // 01010101 ...
 	static var m1:U64 = untyped __cpp__('0x3333333333333333'); // 00110011 ...
-	static var m2:U64 = untyped __cpp__('0x0F0F0F0F0F0f0F0F'); // 00001111 ...
+	static var m2:U64 = untyped __cpp__('0x0F0F0F0F0F0F0F0F'); // 00001111 ...
 
 	#end
 	static function deBruijn32tab():Bytes {
@@ -172,12 +172,16 @@ class Op {
 	static function len32(x:U32) {
 		var ret:Int = 0;
 		if (x >= 1 << 16) {
-			x >>= 16;
+			var _x:Int = cast x;
+			_x >>= 16;
+			x = cast _x;
 			ret = 16;
 		}
 
 		if (x >= 1 << 8) {
-			x >>= 8;
+			var _x:Int = cast x;
+			_x >>= 8;
+			x = cast _x;
 			ret += 8;
 		}
 
@@ -305,10 +309,10 @@ class Op {
         #if cs 
         return cs.system.Math.Truncate(x);
         #elseif java 
-        if (value < 0) {
-            return Math.ceil(value);
+        if (x < 0) {
+            return Math.fceil(x);
         } else {
-            return Math.floor(value);
+            return Math.ffloor(x);
         }
         #elseif cpp 
         return untyped __cpp__('trunc({0})', x);

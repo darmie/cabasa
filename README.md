@@ -87,6 +87,15 @@ Now use this resolver in a VM instance
 var vm = new VM(code, {...}, new MyImportResolver());
 ```
 
+### Run Test 
+```sh
+#compile
+haxe build.hxml
+
+#run jar output
+java -jar build/java/Test-Debug.jar
+```
+
 ### Dependencies
 
  * [Haxe](https://haxe.org/)

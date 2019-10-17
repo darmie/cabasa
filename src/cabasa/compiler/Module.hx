@@ -27,6 +27,7 @@ class Module {
 
 	public function new() {
 		functionNames = new Map<Int, String>();
+		disableFloatingPoints = false;
 	}
 
 	public static function load(raw:Bytes):Module {
@@ -86,7 +87,7 @@ class Module {
 		var ret = new Module();
 		ret.base = m;
 		ret.functionNames = functionNames;
-		return null;
+		return ret;
 	}
 
 	/**
@@ -147,8 +148,9 @@ class Module {
 
 		for (i in 0...base.functionIndexSpace.length) {
 			var f = base.functionIndexSpace[i];
-
+		
 			var d = new Disassembly(f, base);
+			
 			var compiler = new FunctionCompiler(base, d);
 			compiler.callIndexOffset = numFuncImports;
 			compiler.compile(importTypeIDs);

@@ -42,12 +42,12 @@ class FunctionCompiler {
 		locations = [];
 		stackValueSets = new Map<Int, Array<TyValueID>>();
 		usedValueIDs = new Map<TyValueID, Dynamic>();
-
+		this.valueID = 0;
 		pushStack = Reflect.makeVarArgs(ppushBack);
 	}
 
 	public function nextValueID():TyValueID {
-		this.valueID++;
+		this.valueID + 1;
 		return this.valueID;
 	}
 
@@ -73,10 +73,14 @@ class FunctionCompiler {
 				throw "pushing a value ID twice is not supported yet";
 			}
 			usedValueIDs.set(id, {});
-			stackValueSets.get(stack.length + i).push(id);
+			if (stackValueSets.exists(stack.length + i)) {
+				stackValueSets.get(stack.length + i).push(id);
+			} else {
+				stackValueSets.set(stack.length + i, [id]);
+			}
 		}
 
-		stack.concat([for (value in values) cast value]);
+		stack = stack.concat([for (value in values) cast value]);
 	}
 
 	public function fixupLocationRef(loc:Location, wasUnreachable:Bool) {
@@ -95,8 +99,10 @@ class FunctionCompiler {
 			innerBrTarget = Int64.ofInt(code.length);
 		}
 
-		for (info in loc.fixupList) {
-			code[info.codePos].immediates[info.tablePos] = innerBrTarget;
+		if (loc.fixupList != null) {
+			for (info in loc.fixupList) {
+				code[info.codePos].immediates[info.tablePos] = innerBrTarget;
+			}
 		}
 
 		if (loc.preserveTop || loc.loopPreserveTop) {
@@ -392,7 +398,7 @@ class FunctionCompiler {
 					}
 				case BrIf:
 					{
-						var brValues = [popStack(1)[0], 0];
+						var brValues = [popStack(1)[0], cast 0];
 						var _label:U32 = ins.immediates[0];
 						var label:Int = cast _label;
 
@@ -416,7 +422,7 @@ class FunctionCompiler {
 						var count:Int = cast _count;
 						var brCount = count + 1;
 						var brTargets:Array<I64> = [];
-						var brValues = [popStack(1)[0], 0];
+						var brValues = [popStack(1)[0], cast 0];
 
 						var preserveTop = false;
 
@@ -666,34 +672,36 @@ class FunctionCompiler {
 	public function regAlloc():Int {
 		var regID:TyValueID = 1;
 
-		var valueRelocs = new Map<TyValueID, TyValueID>();
+		var valueRelocs:Map<TyValueID, TyValueID> = [];
 
 		for (values in stackValueSets) {
 			for (v in values) {
-				valueRelocs.set(v, regID);
+				valueRelocs.set(cast v, cast regID);
 			}
-			regID++;
+			regID + 1;
 		}
 
 		for (i in 0...code.length) {
 			var ins = code[i];
+
 			if (ins.target != 0) {
-				var reg = valueRelocs.get(ins.target);
+				var reg = valueRelocs.get(cast ins.target);
 				if (reg != null) {
 					ins.target = reg;
 				} else {
 					throw "Register not found for target";
 				}
 			}
-
-			for (j in 0...ins.values.length) {
-				var v = ins.values[j];
-				if (v != 0) {
-					var reg = valueRelocs.get(v);
-					if (reg != null) {
-						ins.values[j] = reg;
-					} else {
-						throw "Register not found for value";
+			if (ins.values != null) {
+				for (j in 0...ins.values.length) {
+					var v = ins.values[j];
+					if (v != 0) {
+						var reg = valueRelocs.get(cast v);
+						if (reg != null) {
+							ins.values[j] = reg;
+						} else {
+							throw "Register not found for value";
+						}
 					}
 				}
 			}
