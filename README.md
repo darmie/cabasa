@@ -96,6 +96,14 @@ haxe build.hxml
 java -jar build/java/Test-Debug.jar
 ```
 
+### Why Cābāsā ? 
+I personally found other haxe embedded scripting interfaces quite limiting. `CPPIA` only works in C++ targets, `HL` only work in Hashlink VM just like `Neko` runs only in its VM. `hscript` is nice, it's crossplatform but it is a stripped down version of haxe, taking away useful features like types, OOP and modular imports (I honestly tried to fix this with [hxComposer](https://github.com/darmie/hxComposer)), it is at best just for expressions.
+
+WebAssembly shows promise, apart from its much advertise use of redistributing native libraries to the web, it has drawn the attention of server side developers who feel the need to run self contained apps with all the advantages promised by WebAssembly. The WebAssembly [specification](https://webassembly.org) describes a stack based immediate language with promise of a faster load time, smaller and portable binary size, and memory-safe execution environment.
+
+**Haxe + WebAssembly = ** :zap: :zap: , a combined force that will benefit all cross platform software engineers. With Haxe's cross platform abilities and `wasm`, software distribution accross platforms should be more fluid by reducing the need for platform specific glue code, which makes for a more portable software without compromise on quality and performance.
+
+
 ### Dependencies
 
  * [Haxe](https://haxe.org/)
@@ -103,8 +111,18 @@ java -jar build/java/Test-Debug.jar
  * [Binary128](https://github.com/darmie/binary128)
  * [Numerix](https://github.com/darmie/numerix)
 
+
+### Supported Targets
+- C++
+- Java
+- C#
+
+
 ### To-Do
+- Support runtime and AOT compilation for HashLink binary 
+- Support runtime and AOT compilation for Neko binary
+- Support runtime and AOT compilation for CPPIA binary
 - Command Line Interface for running wasm module from terminal, disassemble wasm or compile wasm to Haxe AOT
 - Validate wasm binary
 - Extension framwork for distributing wasm modules as Haxe libraries
-- Examples 
+- Examples
