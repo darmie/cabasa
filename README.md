@@ -101,7 +101,7 @@ I personally found other haxe embedded scripting interfaces quite limiting. `CPP
 
 WebAssembly shows promise, apart from its much advertise use of redistributing native libraries to the web, it has drawn the attention of server side developers who feel the need to run self contained apps with all the advantages promised by WebAssembly. The WebAssembly [specification](https://webassembly.org) describes a stack based immediate language with promise of a faster load time, smaller and portable binary size, and memory-safe execution environment.
 
-**Haxe + WebAssembly = ** :zap: :zap: , a combined force that will benefit all cross platform software engineers. With Haxe's cross platform abilities and `wasm`, software distribution accross platforms should be more fluid by reducing the need for platform specific glue code, which makes for a more portable software without compromise on quality and performance.
+**Haxe + WebAssembly =** :zap: :zap: , a combined force that will benefit all cross platform software engineers. With Haxe's cross platform abilities and `wasm`, software distribution accross platforms should be more fluid by reducing the need for platform specific glue code, which makes for a more portable software without compromise on quality and performance.
 
 
 ### Dependencies
