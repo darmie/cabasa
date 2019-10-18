@@ -94,6 +94,9 @@ haxe build.hxml
 
 #run jar output
 java -jar build/java/Test-Debug.jar
+
+#run exe output
+build/cs/bin/Test-Debug.exe
 ```
 
 ### Why Cābāsā ? 

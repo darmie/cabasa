@@ -615,7 +615,11 @@ class VM {
 							var b:U32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4, frame.IP + 8))];
 
 							frame.IP += 8;
+							#if cs
+							var val = rotateRight32(a, b);
+							#else 
 							var val = rotateLeft32(a, -b);
+							#end
 							frame.regs[valueID] = Int64.ofInt(val);
 						}
 					case I32Clz:
@@ -919,7 +923,7 @@ class VM {
 							var val:U64 = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, frame.IP + 4))];
 
 							frame.IP += 4;
-							frame.regs[valueID] = Int64.ofInt(TrailingZeros64(val));
+							frame.regs[valueID] = Int64.ofInt(TrailingZeros64(cast val));
 						}
 					case I64EqZ:
 						{
@@ -1721,7 +1725,11 @@ class VM {
 								return;
 							} else {
 								frame = getCurrentFrame();
-								frame.regs[frame.returnReg] = val;
+								if(frame == null){
+									frame = {}; 
+									frame.regs = [];
+								}
+								frame.regs.insert(frame.returnReg, val);
 							}
 						}
 					case ReturnVoid:

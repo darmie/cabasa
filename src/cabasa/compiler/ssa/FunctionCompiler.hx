@@ -15,6 +15,10 @@ import haxe.io.Bytes;
 
 using cabasa.compiler.Opcodes;
 
+#if cs
+import cs.system.collections.generic.Dictionary_2;
+#end
+
 /**
  * FunctionCompiler represents a compiler which translates a WebAssembly module's
  * intepreted code into a Static-Single-Assignment-based intermediate representation.
@@ -29,7 +33,13 @@ class FunctionCompiler {
 
 	public var callIndexOffset:Int;
 	public var stackValueSets:Map<Int, Array<TyValueID>>;
+
+	#if cs
+	public var usedValueIDs:Dictionary_2<TyValueID, Dynamic>;
+	#else
 	public var usedValueIDs:Map<TyValueID, Dynamic>;
+	#end
+
 	public var valueID:TyValueID;
 
 	public var pushStack:Dynamic = null;
@@ -41,13 +51,23 @@ class FunctionCompiler {
 		stack = [];
 		locations = [];
 		stackValueSets = new Map<Int, Array<TyValueID>>();
+
+		#if cs
+		usedValueIDs = new Dictionary_2<TyValueID, Dynamic>();
+		#else
 		usedValueIDs = new Map<TyValueID, Dynamic>();
+		#end
+
 		this.valueID = 0;
 		pushStack = Reflect.makeVarArgs(ppushBack);
 	}
 
 	public function nextValueID():TyValueID {
+		#if cs
+		this.valueID++;
+		#else
 		this.valueID + 1;
+		#end
 		return this.valueID;
 	}
 
@@ -69,10 +89,15 @@ class FunctionCompiler {
 	function ppushBack(values:Array<Dynamic>) {
 		for (i in 0...values.length) {
 			var id:TyValueID = cast values[i];
-			if (usedValueIDs.exists(id)) {
+			var exists = #if cs usedValueIDs.ContainsKey(id); #else usedValueIDs.exists(id); #end
+			if (exists) {
 				throw "pushing a value ID twice is not supported yet";
 			}
-			usedValueIDs.set(id, {});
+			#if cs
+			usedValueIDs.Add(cast id, {});
+			#else
+			usedValueIDs.set(cast id, {});
+			#end
 			if (stackValueSets.exists(stack.length + i)) {
 				stackValueSets.get(stack.length + i).push(id);
 			} else {
@@ -101,7 +126,7 @@ class FunctionCompiler {
 
 		if (loc.fixupList != null) {
 			for (info in loc.fixupList) {
-				code[info.codePos].immediates[info.tablePos] = innerBrTarget;
+				code[info.codePos].immediates.insert(info.tablePos, innerBrTarget);
 			}
 		}
 
@@ -672,11 +697,19 @@ class FunctionCompiler {
 	public function regAlloc():Int {
 		var regID:TyValueID = 1;
 
-		var valueRelocs:Map<TyValueID, TyValueID> = [];
+		#if cs
+		var valueRelocs:Dictionary_2<TyValueID, TyValueID> = new Dictionary_2<TyValueID, TyValueID>();
+		#else
+		var valueRelocs:Map<TyValueID, TyValueID> = new Map<TyValueID, TyValueID>();
+		#end
 
 		for (values in stackValueSets) {
 			for (v in values) {
-				valueRelocs.set(cast v, cast regID);
+				#if cs
+				valueRelocs.Add(v, regID);
+				#else
+				valueRelocs.set(v, regID);
+				#end
 			}
 			regID + 1;
 		}
@@ -685,8 +718,14 @@ class FunctionCompiler {
 			var ins = code[i];
 
 			if (ins.target != 0) {
-				var reg = valueRelocs.get(cast ins.target);
-				if (reg != null) {
+				#if cs
+				var key:U64 = ins.target;
+				var reg:U64 = 0;
+				valueRelocs.TryGetValue(key, reg); // untyped __cs__('valueRelocs[(uint)(ulong){0}]', key);
+				#else
+				var reg = valueRelocs.get(ins.target);
+				#end
+				if (reg != 0) {
 					ins.target = reg;
 				} else {
 					throw "Register not found for target";
@@ -696,8 +735,15 @@ class FunctionCompiler {
 				for (j in 0...ins.values.length) {
 					var v = ins.values[j];
 					if (v != 0) {
-						var reg = valueRelocs.get(cast v);
-						if (reg != null) {
+						// var reg = valueRelocs.get(v);
+						#if cs
+						var key:U64 = v;
+						var reg:U64 = 0;
+						valueRelocs.TryGetValue(key, reg);
+						#else
+						var reg = valueRelocs.get(v);
+						#end
+						if (reg != 0) {
 							ins.values[j] = reg;
 						} else {
 							throw "Register not found for value";

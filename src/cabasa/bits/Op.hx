@@ -140,17 +140,17 @@ class Op {
 	 * returns the number of trailing zero bits in x; the result is 32 for x == 0.
 	 * @param x
 	 */
-	public static function TrailingZeros32(x:U32) {
+	public static function TrailingZeros32 #if !cs (x:U32) #else (x:I32) #end {
 		if (x == 0)
 			return 32;
-		return _deBruijn32tab.get((x & -x) * deBruijn32 >> (32 - 5));
+		return _deBruijn32tab.get((cast x & -(cast x)) * deBruijn32 >> (32 - 5));
 	}
 
 	/**
 	 * returns the number of trailing zero bits in x; the result is 64 for x == 0.
 	 * @param x
 	 */
-	public static function TrailingZeros64(x:U64):Int {
+	public static function TrailingZeros64#if !cs (x:U64) #else (x:I64) #end {
 		if (x == 0)
 			return 64;
 
@@ -165,7 +165,7 @@ class Op {
 		// find by how many bits it was shifted by looking at which six bit
 		// substring ended up at the top of the word.
 		// (Knuth, volume 4, section 7.3.1)
-		var v = (x & -x) * deBruijn64 >> (64 - 6);
+		var v = (cast x & -(cast x)) * deBruijn64 >> (64 - 6);
 		return _deBruijn64tab.get(cast v);
 	}
 
@@ -229,7 +229,7 @@ class Op {
 	 * @param x
 	 */
 	public static function OnesCount32(x:U32) {
-		return _pop8tab.get(x >> 24) + _pop8tab.get(x >> 16 & 0xff) + _pop8tab.get(x >> 8 & 0xff) + _pop8tab.get(x & 0xff);
+		return _pop8tab.get(x >> 24) + _pop8tab.get(x >> 16 & 0xff) + _pop8tab.get(x >> 8 & 0xff) + _pop8tab.get((cast x) & 0xff);
 	}
 
 	/**
@@ -256,7 +256,7 @@ class Op {
 		// Per "Hacker's Delight", the first line can be simplified
 		// more, but it saves at best one instruction, so we leave
 		// it alone for clarity.
-        var m = 1<<64 - 1;
+        var m #if cs:U64#end = cast (1<<64 - 1);
         x = x>>1&(m0&m) + x&(m0&m);
         x = x>>2&(m1&m) + x&(m1&m);
         x = (x>>4 + x) & (m2 & m);
@@ -269,12 +269,32 @@ class Op {
         return v;
 	}
 
-    public static function rotateLeft32(x:I32, n:I32):I32{
+    public static function rotateLeft32(x:#if cs U32 #else I32 #end, n:Int){
+		#if cs
+		return (x << n) | (x >> (32 - n));
+		#else
 		return (x << n) | (x >> (32 - n)) & ~(-1 << n);
+		#end
 	}
 
-    public static function rotateLeft64(x:I64, n):I64{
+	public static function rotateRight32(x:U32, n:Int){
+		#if cs
+		return (x >> n) | (x >> (32 - n));
+		#end
+	}
+
+	public static function rotateRight64(x:U64, n:Int){
+		#if cs
+		return (x >> n) | (x >> (64 - n));
+		#end
+	}
+
+    public static function rotateLeft64(x:#if cs U64 #else I64 #end, n) {
+		#if cs
+		return (x << n) | (x >> (64 - n));
+		#else
 		return (x << n) | (x >> (64 - n)) & ~(-1 << n);
+		#end
 	}
 
     public static function Float32frombits(x:U32):Float {
