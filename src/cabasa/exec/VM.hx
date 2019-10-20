@@ -64,6 +64,15 @@ class VM {
 	public var stackTrace:String;
 
 	/**
+	 * Runs a WebAssembly modules function denoted by its ID with a specified set of parameters.
+	 *
+	 * @param entryID
+	 * @param params
+	 * @return RunVal
+	 */
+	public var run:Dynamic = null;
+
+	/**
 	 * Instantiates a virtual machine for a given WebAssembly module, with
 	 * specific execution options specified under a VMConfig, and a WebAssembly module import
 	 * resolver.
@@ -206,6 +215,7 @@ class VM {
 		this.memory = memory;
 		this.exited = true;
 		this.importResolver = importResolver;
+		this.run = Reflect.makeVarArgs(_run);
 	}
 
 	public function setAOTService(s:AOTService) {
@@ -380,7 +390,12 @@ class VM {
 	 * @param params
 	 * @return RunVal
 	 */
-	public function run(entryID:Int, params:Array<I64>):RunVal {
+	private function _run(args:Array<Dynamic>):RunVal {
+
+		var entryID:Int = args[0];
+		var params:Array<I64> = [for(v in args.slice(1)) cast v];
+
+
 		var retVal:RunVal = {};
 		this.ignite(entryID, params); // call Ignite() to perform necessary checks even if we are using the AOT mode.
 

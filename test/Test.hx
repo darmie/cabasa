@@ -27,7 +27,7 @@ class Test {
 		}, new NopResolver());
 
 		var add_funcID = vm.getFunctionExport("add");
-		var data = vm.run(add_funcID, [50, 70]);
+		var data = vm.run(add_funcID, 50, 70);
 		if (data.err != null) {
 			trace(data.err);
 			// do something with error
@@ -53,7 +53,7 @@ class Test {
 		}, new NopResolver());
 
 		var main_funcID = vm.getFunctionExport("main");
-		var data = vm.run(main_funcID, []);
+		var data = vm.run(main_funcID);
 		if (data.err != null) {
 			trace(data.err);
 			// do something with error
@@ -61,7 +61,7 @@ class Test {
 		var val:I64 = data.result;
 
 		Sys.println('=== Executing function main() =====');
-		Sys.println('=== in program add.wasm ===========\n');
+		Sys.println('=== in program program.wasm ===========\n');
 		var buf = new StringBuf();
 		Writer.writeTo(buf, vm.module.base);
 		Sys.println(buf.toString());
