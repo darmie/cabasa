@@ -11,11 +11,11 @@ import wasp.types.*;
 using cabasa.compiler.Opcodes;
 
 typedef InterpreterCode = {
-	numRegs:Int,
-	numParams:Int,
-	numLocals:Int,
-	numReturns:Int,
-	bytes:Bytes,
+	?numRegs:Int,
+	?numParams:Int,
+	?numLocals:Int,
+	?numReturns:Int,
+	?bytes:Bytes,
 	?JITInfo:Dynamic,
 	?JITDone:Bool
 }
@@ -34,7 +34,6 @@ class Module {
 		var reader = new BytesInput(raw);
 
 		var m = wasp.Module.read(reader, null);
-
 		/**
 		 * Todo: validate
 		 */
@@ -43,12 +42,21 @@ class Module {
 
 		for (sec in m.customs) {
 			if (sec.name == "name") {
+				if(sec.getRawSection().bytes == null) sec.getRawSection().bytes = Bytes.alloc(0);
 				var r = new BytesInput(sec.getRawSection().bytes);
+				
 				while (true) {
-					var ty = Leb128.readUint32(r);
-					if (ty != 1)
-						break;
-
+					var ty = 0;
+					try{
+						ty = Leb128.readUint32(r);
+						if (ty != 1)
+							break;
+					}catch(e:Dynamic){
+						if(Std.is(e, Eof)){
+							break;
+						}
+					}
+					
 					var payloadLen = Leb128.readUint32(r);
 					var data = Bytes.alloc(payloadLen);
 					var n = r.readBytes(data, 0, payloadLen);
@@ -144,7 +152,10 @@ class Module {
 		}
 
 		var numFuncImports = ret.length;
-		ret.resize(base.functionIndexSpace.length);
+		for(i in 0...base.functionIndexSpace.length){
+			ret.push({});
+		}
+		
 
 		for (i in 0...base.functionIndexSpace.length) {
 			var f = base.functionIndexSpace[i];

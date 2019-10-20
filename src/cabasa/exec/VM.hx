@@ -97,7 +97,7 @@ class VM {
 
 		var functionCode = module.compileInterp();
 
-		var table:Array<U32> = [];
+		// var table:Array<U32> = [];
 		var globals:Array<I64> = [];
 		var funcImports:Array<FunctionImportInfo> = [];
 
@@ -168,11 +168,16 @@ class VM {
 					// copy elements to table from offset
 					table.splice(offset, e.elems.length);
 					for (i in e.elems) {
-						table.insert(offset++, i);
+						table.insert(offset++, cast i);
 					}
+					
 				}
+				
 			}
+			this.table = table;
 		}
+
+		
 
 		// Load linear memory.
 		var memory = Bytes.alloc(0);
@@ -210,7 +215,7 @@ class VM {
 			this.callStack[i] = {};
 		}
 		this.currentFrame = -1;
-		this.table = table;
+		// this.table = table;
 		this.globals = globals;
 		this.memory = memory;
 		this.exited = true;
@@ -1771,7 +1776,6 @@ class VM {
 						{
 							var id:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4));
 							var val = frame.locals[id];
-							
 							frame.IP += 4;
 							frame.regs[valueID] = val;
 						}
@@ -1832,8 +1836,9 @@ class VM {
 							frame.IP += 4;
 
 							var sig = module.base.types.entries[typeID];
-
+			
 							var functionID:Int = table[tableItemId];
+							
 							var code = functionCode[functionID];
 
 							// TODO: We are only checking CC here; Do we want strict typeck?
