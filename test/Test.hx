@@ -8,12 +8,14 @@ import sys.io.File;
 
 class Test {
 	public static function main() {
-		var source = FileSystem.fullPath("test/add.wasm");
-		var raw = File.getBytes(source);
+		var source1 = FileSystem.fullPath("test/program.wasm");
+		var raw1 = File.getBytes(source1);
+		var source2 = FileSystem.fullPath("test/add.wasm");
+		var raw2 = File.getBytes(source2);
 		
 		Sys.println('===================================');
-		call_add(raw);
-		call_main(raw);
+		call_add(raw2);
+		call_main(raw1);
 	}
 
 	static function call_add(code:Bytes){
