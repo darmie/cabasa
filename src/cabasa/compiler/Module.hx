@@ -164,6 +164,7 @@ class Module {
 				var count:Int = v.count;
 				numLocals += count;
 			}
+
 			ret[numFuncImports + i] = {
 				numRegs: numRegs,
 				numParams: f.sig.paramTypes.length,

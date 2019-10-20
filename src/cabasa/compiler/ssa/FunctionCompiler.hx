@@ -66,7 +66,7 @@ class FunctionCompiler {
 		#if cs
 		this.valueID++;
 		#else
-		this.valueID + 1;
+		this.valueID++;
 		#end
 		return this.valueID;
 	}
@@ -82,7 +82,6 @@ class FunctionCompiler {
 
 		ret = stack.slice(pos);
 		stack = stack.slice(0, pos);
-
 		return ret;
 	}
 
@@ -290,7 +289,8 @@ class FunctionCompiler {
 						#elseif cpp
 						var val = untyped __cpp__('(int64_t){0}', v);
 						#end
-						code.push(buildInstr(retID, op.toString(), [val], null));
+						var instr = buildInstr(retID, op.toString(), [val], null);
+						code.push(instr);
 						pushStack(retID);
 					}
 				case SetLocal | SetGlobal:
@@ -711,34 +711,35 @@ class FunctionCompiler {
 				valueRelocs.set(v, regID);
 				#end
 			}
-			regID + 1;
+			regID++;
 		}
 
 		for (i in 0...code.length) {
 			var ins = code[i];
-
+			
 			if (ins.target != 0) {
-				#if cs
-				var key:U64 = ins.target;
-				var reg:U64 = 0;
-				valueRelocs.TryGetValue(key, reg); // untyped __cs__('valueRelocs[(uint)(ulong){0}]', key);
-				#else
-				var reg = valueRelocs.get(ins.target);
-				#end
-				if (reg != 0) {
+				try {
+					#if cs
+					var key:U64 = ins.target;
+					var reg:U64 = 0;
+					valueRelocs.TryGetValue(key, reg); // untyped __cs__('valueRelocs[(uint)(ulong){0}]', key);
+					#else
+					var reg = valueRelocs.get(ins.target);
+					#end
 					ins.target = reg;
-				} else {
+				} catch (e:Dynamic) {
 					throw "Register not found for target";
 				}
 			}
 			if (ins.values != null) {
+				
 				for (j in 0...ins.values.length) {
 					var v = ins.values[j];
 					if (v != 0) {
 						// var reg = valueRelocs.get(v);
 						#if cs
 						var key:U64 = v;
-						var reg:U64 = 0;
+						var reg:U64 = -1;
 						valueRelocs.TryGetValue(key, reg);
 						#else
 						var reg = valueRelocs.get(v);
@@ -777,6 +778,7 @@ class FunctionCompiler {
 			var ins = code[i];
 
 			insRelocs[i] = buf.length;
+			
 			LittleEndian.PutUint32(buf, cast ins.target);
 
 			switch ins.op {
