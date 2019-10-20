@@ -474,7 +474,7 @@ class VM {
 					case I32Add:
 						{
 							var a_reg:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4));
-							var b_reg:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, 8));
+							var b_reg:I32 = cast LittleEndian.Uint32(frame.code.sub(frame.IP+4, 4));
 							
 							var a:I32 = cast frame.regs[a_reg];
 							var b:I32 = cast frame.regs[b_reg];
