@@ -215,7 +215,7 @@ class VM {
 		this.memory = memory;
 		this.exited = true;
 		this.importResolver = importResolver;
-		this.run = Reflect.makeVarArgs(_run);
+		this.run = Reflect.makeVarArgs(_run);  // haxe magic to remove need for array params in run function
 	}
 
 	public function setAOTService(s:AOTService) {
@@ -308,7 +308,7 @@ class VM {
 		return callStack[currentFrame];
 	}
 
-	function getExport(key:String, kind:External) {
+	function getExport(key:String, kind:External):I64 {
 		if (module.base.export == null) {
 			return -1;
 		}
@@ -392,8 +392,12 @@ class VM {
 	 */
 	private function _run(args:Array<Dynamic>):RunVal {
 
-		var entryID:Int = args[0];
+		var entryID:Int = Int64.toInt(args[0]);
+		#if !cs
 		var params:Array<I64> = [for(v in args.slice(1)) cast v];
+		#else 
+		var params:Array<I64> = [for(v in args.slice(1)) untyped __cs__('System.Convert.ToInt64({0})', v)];
+		#end
 
 
 		var retVal:RunVal = {};
