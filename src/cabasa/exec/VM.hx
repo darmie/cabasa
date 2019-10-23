@@ -102,7 +102,6 @@ class VM {
 		var funcImports:Array<FunctionImportInfo> = [];
 
 		
-
 		if (module.base.import_ != null && importResolver != null) {
 			for (imp in module.base.import_.entries) {
 				switch imp.type.kind() {
@@ -177,8 +176,7 @@ class VM {
 			this.table = table;
 		}
 
-		
-
+	
 		// Load linear memory.
 		var memory = Bytes.alloc(0);
 		if (module.base.memory != null && module.base.memory.entries.length > 0) {
@@ -404,9 +402,9 @@ class VM {
 		var params:Array<I64> = [for(v in args.slice(1)) untyped __cs__('System.Convert.ToInt64({0})', v)];
 		#end
 
-
 		var retVal:RunVal = {};
 		this.ignite(entryID, params); // call Ignite() to perform necessary checks even if we are using the AOT mode.
+
 
 		if (AOTService != null) {
 			try {
@@ -471,7 +469,6 @@ class VM {
 				var valueID:Int = cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4));
 				var ins:Opcodes = frame.code.get(frame.IP+4);
 				frame.IP += 5;
-			
 				switch ins {
 					case Nop:
 					case Unreachable:
@@ -479,8 +476,8 @@ class VM {
 					case Select:
 						{
 							var a = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP, 4))];
-							var b = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4,  8))];
-							var c:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, 12))];
+							var b = frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 4,  4))];
+							var c:I32 = cast frame.regs[cast LittleEndian.Uint32(frame.code.sub(frame.IP + 8, 4))];
 							frame.IP += 12;
 
 							if (c != 0) {

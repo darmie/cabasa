@@ -108,6 +108,7 @@ class FunctionCompiler {
 	}
 
 	public function fixupLocationRef(loc:Location, wasUnreachable:Bool) {
+		
 		if (loc.preserveTop || loc.loopPreserveTop) {
 			if (wasUnreachable) {
 				code.push(buildInstr(0, "jmp", [Int64.ofInt(code.length + 1)], [0]));
@@ -115,7 +116,7 @@ class FunctionCompiler {
 				code.push(buildInstr(0, "jmp", [Int64.ofInt(code.length + 1)], popStack(1)));
 			}
 		}
-
+		
 		var innerBrTarget:I64 = 0;
 		if (loc.brHead) {
 			innerBrTarget = Int64.ofInt(loc.codePos);
@@ -159,7 +160,12 @@ class FunctionCompiler {
 	public function compile(importTypeIDs:Array<Int>) {
 		locations.push({
 			codePos: 0,
-			stackDepth: 0
+			stackDepth: 0,
+			brHead: false,
+			loopPreserveTop: false,
+			ifBlock: false,
+			fixupList: [],
+			preserveTop: false
 		});
 
 		var unreachableDepth = 0;
@@ -322,7 +328,11 @@ class FunctionCompiler {
 						locations.push({
 							codePos: code.length,
 							stackDepth: stack.length,
-							preserveTop: ins.block.signature != BlockType.BlockTypeEmpty
+							preserveTop: ins.block.signature != BlockType.BlockTypeEmpty,
+							loopPreserveTop: false, 
+							ifBlock: false, 
+							fixupList: [], 
+							brHead: false
 						});
 					}
 				case Loop:
@@ -330,8 +340,11 @@ class FunctionCompiler {
 						locations.push({
 							codePos: code.length,
 							stackDepth: stack.length,
+							preserveTop: false,
 							loopPreserveTop: ins.block.signature != BlockType.BlockTypeEmpty,
-							brHead: true
+							ifBlock: false, 
+							brHead: true,
+							fixupList: [], 
 						});
 					}
 				case If:
@@ -341,7 +354,10 @@ class FunctionCompiler {
 							codePos: code.length,
 							stackDepth: stack.length,
 							preserveTop: ins.block.signature != BlockType.BlockTypeEmpty,
-							ifBlock: true
+							ifBlock: true,
+							loopPreserveTop: false, 
+							fixupList: [], 
+							brHead: false
 						});
 						code.push(buildInstr(0, 'jmp_if', [Int64.ofInt(code.length + 2)], [cond, 0]));
 						code.push(buildInstr(0, 'jmp', [Int64.ofInt(-1)], [0]));
@@ -666,6 +682,8 @@ class FunctionCompiler {
 			}
 		}
 
+		
+
 		var label = insLabels.get(code.length);
 		if (label != null) {
 			var lastBlock = g.blocks[label];
@@ -780,7 +798,7 @@ class FunctionCompiler {
 			insRelocs[i] = buf.length;
 			
 			LittleEndian.PutUint32(buf, cast ins.target);
-
+		
 			switch ins.op {
 				case "unreachable":
 					buf.writeByte(Unreachable);
@@ -1637,7 +1655,7 @@ class FunctionCompiler {
 
 		var ret = buf.getBytes();
 		for (t in reloc32Targets) {
-			var insPos:Int = cast LittleEndian.Uint32(ret.sub(t, t + 4));
+			var insPos:Int = cast LittleEndian.Uint32(ret.sub(t, 4));
 			var bo = new BytesOutput();
 			LittleEndian.PutUint32(bo, cast insRelocs[insPos]);
 			ret.blit(t, bo.getBytes(), 0, 4);
