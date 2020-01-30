@@ -233,12 +233,15 @@ class VM {
 			try {
 				var op = r.readByte();
 				var b:wasp.operators.Ops = op;
+
+				// This is a hack {
 				var bo = new BytesOutput();
 				bo.writeByte(op);
-			
 				if(bo.getBytes().toHex() == "00"){
 					continue;
 				}
+				// }
+
 				switch b {
 					case I32Const:
 						{
