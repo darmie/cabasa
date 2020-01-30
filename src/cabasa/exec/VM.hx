@@ -231,8 +231,14 @@ class VM {
 
 		while (true) {
 			try {
-				var b:wasp.operators.Ops = r.readByte();
-
+				var op = r.readByte();
+				var b:wasp.operators.Ops = op;
+				var bo = new BytesOutput();
+				bo.writeByte(op);
+			
+				if(bo.getBytes().toHex() == "00"){
+					continue;
+				}
 				switch b {
 					case I32Const:
 						{
