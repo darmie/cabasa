@@ -1,3 +1,3 @@
--D Wasp=0.0.7
-# @install: lix --silent download "haxelib:/Wasp#0.0.7" into Wasp/0.0.7/haxelib
--cp ${HAXE_LIBCACHE}/Wasp/0.0.7/haxelib/src
+-D wasp=0.0.8
+# @install: lix --silent download "gh://github.com/darmie/wasp#ed27253fdbe535e959e7605b0aaf109bdcb61c26" into Wasp/0.0.7/github/ed27253fdbe535e959e7605b0aaf109bdcb61c26
+-cp ${HAXE_LIBCACHE}/Wasp/0.0.7/github/ed27253fdbe535e959e7605b0aaf109bdcb61c26/src
