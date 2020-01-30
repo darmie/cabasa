@@ -7,6 +7,7 @@ import wasp.imports.*;
 import binary128.internal.Leb128;
 import haxe.io.*;
 import wasp.types.*;
+import cabasa.exec.*;
 
 using cabasa.compiler.Opcodes;
 
@@ -30,7 +31,7 @@ class Module {
 		disableFloatingPoints = false;
 	}
 
-	public static function load(raw:Bytes):Module {
+	public static function load(raw:Bytes, ?resolver:ImportResolver):Module {
 		var reader = new BytesInput(raw);
 
 		var m = wasp.Module.read(reader, null);

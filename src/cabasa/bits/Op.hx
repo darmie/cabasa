@@ -9,7 +9,7 @@ import haxe.io.BytesBuffer;
  * Bit operations borrowed from Golang: https://golang.org/src/math/bits/bits.go
  */
 #if cpp
-@:include("<math.h>");
+@:include("<math.h>")
 #end
 class Op {
 	private static function uint(val):U32 {

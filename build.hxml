@@ -17,10 +17,13 @@
 # -D ammer.lib.leb128.include=Binary128/native/cpp
 # -D ammer.lib.leb128.library=Binary128/native/cpp
 
---each
+# --each
 
--cs build/cs/
+# -cs build/cs/
 
---next
+# --next
 
--java build/java/
+# -java build/java/
+
+# --next
+-cpp build/cpp

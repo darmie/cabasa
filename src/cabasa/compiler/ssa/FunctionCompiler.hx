@@ -1,5 +1,6 @@
 package cabasa.compiler.ssa;
 
+import haxe.ds.WeakMap;
 import haxe.io.BytesBuffer;
 import wasp.io.Read;
 import haxe.io.BytesInput;
@@ -23,6 +24,7 @@ import cs.system.collections.generic.Dictionary_2;
  * FunctionCompiler represents a compiler which translates a WebAssembly module's
  * intepreted code into a Static-Single-Assignment-based intermediate representation.
  */
+
 class FunctionCompiler {
 	public var module:Module;
 	public var source:Disassembly;
@@ -717,14 +719,18 @@ class FunctionCompiler {
 
 		#if cs
 		var valueRelocs:Dictionary_2<TyValueID, TyValueID> = new Dictionary_2<TyValueID, TyValueID>();
-		#else
+		#elseif java
 		var valueRelocs:Map<TyValueID, TyValueID> = new Map<TyValueID, TyValueID>();
+		#else 
+		var valueRelocs:StdMap = new StdMap();
 		#end
 
 		for (values in stackValueSets) {
 			for (v in values) {
 				#if cs
 				valueRelocs.Add(v, regID);
+				#elseif java
+				valueRelocs.set(v, regID);
 				#else
 				valueRelocs.set(v, regID);
 				#end
@@ -741,6 +747,8 @@ class FunctionCompiler {
 					var key:U64 = ins.target;
 					var reg:U64 = 0;
 					valueRelocs.TryGetValue(key, reg); // untyped __cs__('valueRelocs[(uint)(ulong){0}]', key);
+					#elseif java 
+					var reg =  valueRelocs.get(ins.target);
 					#else
 					var reg = valueRelocs.get(ins.target);
 					#end
@@ -759,6 +767,8 @@ class FunctionCompiler {
 						var key:U64 = v;
 						var reg:U64 = -1;
 						valueRelocs.TryGetValue(key, reg);
+						#elseif java
+						var reg = valueRelocs.get(v);
 						#else
 						var reg = valueRelocs.get(v);
 						#end
