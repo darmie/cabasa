@@ -1,14 +1,16 @@
 -cp ./src/
 -cp ./test/
--cp ./wasp/Binary128/src
--cp ./wasp/src
 
--main Test
+-lib Wasp
+-lib Binary128
+-lib Numerix
+-lib hexlog
+-lib rxhaxe
 
-# -lib console.hx
+-main test.Test
 
-# -D utest
--dce full
--cs build/cs
+-D debug
 
--cmd wine build/cs/bin/Deflate.exe
+-cs build/cs/
+
+-cmd wine build/cs/bin/Test-Debug.exe

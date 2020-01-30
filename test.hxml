@@ -1,16 +1,15 @@
 -cp ./src/
 -cp ./test/
--cp ./Binary128/src
 
--main Test
+-lib Wasp
+-lib Binary128
+-lib Numerix
+-lib hexlog
+-lib rxhaxe
 
--lib hxcpp
--lib ammer
--lib console.hx
+-D debug
+-main test.Test
 
--D ammer.lib.leb128.include=Binary128/native/cpp
--D ammer.lib.leb128.library=Binary128/native/cpp
-
-# -D utest
--dce full
 -cpp build/cpp
+
+-cmd build/cpp/Test
